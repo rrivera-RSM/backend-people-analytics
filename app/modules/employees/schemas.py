@@ -20,4 +20,6 @@ class EmployeeRowOut(BaseModel):
     society_id: int | None = None
     society_name: str | None = None
 
-    start_at: datetime
+    attrition_rate: float | None = None
+
+    joined_at: datetime
