@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -43,6 +43,19 @@ class Employee(Base):
     postal_code: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True
     )
+    society_id: Mapped[int | None] = mapped_column(
+        ForeignKey("society.id"), nullable=True
+    )
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("department.id"), nullable=True
+    )
+    office_id: Mapped[int | None] = mapped_column(
+        ForeignKey("office.id"), nullable=True
+    )
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("category.id"), nullable=True
+    )
+
     bol_organic_onboard: Mapped[bool] = mapped_column(Boolean, default=False)
     aud_creation_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

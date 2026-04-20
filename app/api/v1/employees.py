@@ -57,6 +57,27 @@ async def list_employee_rows(
 
 
 @employee_router.get(
+    "/manager/my-team",
+    response_model=list[EmployeeRowOut],
+    response_model_exclude_none=True,
+    dependencies=[Depends(azure_scheme)],
+)
+async def list_employee_rows_by_manager(
+    as_of: datetime | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    current_user=Depends(azure_scheme),
+    service: EmployeeService = Depends(get_employee_service),
+):
+    return await service.list_rows_by_manager(
+        current_user=current_user,
+        as_of=as_of,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@employee_router.get(
     "/{employee_id}/photo",
     dependencies=[Depends(azure_scheme)],
     response_class=Response,
@@ -93,5 +114,19 @@ async def get_employee_monetary_info(
     service: EmployeeService = Depends(get_employee_service),
 ):
     return await service.employee_monetary_info(
+        employee_id=employee_id, as_of=as_of
+    )
+
+
+@employee_router.get(
+    "/{employee_id}/attrition-rate",
+    dependencies=[Depends(azure_scheme)],
+)
+async def get_employee_attrition_rate(
+    employee_id: int,
+    as_of: datetime | None = Query(default=None),
+    service: EmployeeService = Depends(get_employee_service),
+):
+    return await service.employee_attrition_rate(
         employee_id=employee_id, as_of=as_of
     )

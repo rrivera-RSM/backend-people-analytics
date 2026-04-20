@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import uuid
+
+
 from datetime import datetime, timezone
 from sqlalchemy import and_, func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.db.models.core.employee import Employee
 from app.infrastructure.db.models.core.employee_history import EmployeeHistory
-from app.infrastructure.db.models.core.param import Param
+from app.infrastructure.db.models.core.category import Category
 from app.infrastructure.db.models.core.office import Office
 from app.infrastructure.db.models.core.department import Department
 from app.infrastructure.db.models.core.society import Society
@@ -14,6 +17,13 @@ from app.infrastructure.db.models.core.society import Society
 from app.infrastructure.db.models.people.evaluation import Evaluation
 from app.infrastructure.db.models.people.positive_impact import PositiveImpact
 from app.infrastructure.db.models.people.salary import Salary
+from app.infrastructure.db.models.people.app_manager import AppManager
+from app.infrastructure.db.models.people.app_manager_employee import (
+    AppManagerEmployee,
+)
+from app.infrastructure.db.models.people.employee_attrition import (
+    EmployeeAttrition,
+)
 
 
 class EmployeeRepo:
@@ -67,7 +77,7 @@ class EmployeeRepo:
                 Employee.last_name,
                 Employee.dni,
                 Employee.email,
-                Param.param_value.label("category_name"),
+                Category.name.label("category"),
                 Office.id.label("office_id"),
                 Office.name.label("office_name"),
                 Department.id.label("department_id"),
@@ -89,10 +99,10 @@ class EmployeeRepo:
             )
             .outerjoin(Society, Society.id == current_hist.c.society_id)
             .outerjoin(
-                Param,
+                Category,
                 and_(
-                    Param.param_key == current_hist.c.category_id,
-                    Param.param_type == "category",
+                    Category.id == current_hist.c.category_id,
+                    Category.name.ilike(f"%{category}%") if category else True,
                 ),
             )
         )
@@ -109,11 +119,7 @@ class EmployeeRepo:
             stmt = stmt.where(Society.name.ilike(f"%{society}%"))
 
         if category:
-            # como category viene de Param.param_value
-            stmt = stmt.where(
-                Param.param_type == "category",
-                Param.param_value.ilike(f"%{category}%"),
-            )
+            stmt = stmt.where(Category.name.ilike(f"%{category}%"))
 
         # ---- Búsqueda libre (nombre, apellido, dni, email, etc.) ----
         if q:
@@ -132,10 +138,79 @@ class EmployeeRepo:
         res = await self.db.execute(stmt)
         return res.mappings().all()
 
-    async def get_employee_oid(self, employee_id: int) -> str | None:
-        stmt = select(Employee.microsoft_id).where(Employee.id == employee_id)
+    async def list_employee_rows_by_manager(
+        self,
+        manager_employee_id: int,
+        as_of: datetime | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ):
+        as_of = as_of or datetime.now(timezone.utc)
+        manager_subq = (
+            select(AppManager.id)
+            .where(
+                AppManager.id == manager_employee_id,
+                AppManager.bol_active == 1,
+            )
+            .scalar_subquery()
+        )
+        subordinates_subq = select(AppManagerEmployee.employee_id).where(
+            AppManagerEmployee.manager_id == manager_subq,
+            AppManagerEmployee.bol_active == 1,
+        )
+
+        stmt = (
+            select(
+                Employee.id,
+                Employee.first_name,
+                Employee.last_name,
+                Employee.dni,
+                Employee.email,
+                Employee.joined_at,
+                Category.name.label("category"),
+                Office.id.label("office_id"),
+                Office.name.label("office_name"),
+                Department.id.label("department_id"),
+                Department.name.label("department_name"),
+                Society.id.label("society_id"),
+                Society.name.label("society_name"),
+                EmployeeAttrition.attrition_rate.label("attrition_rate"),
+            )
+            .outerjoin(Office, Office.id == Employee.office_id)
+            .outerjoin(Department, Department.id == Employee.department_id)
+            .outerjoin(Society, Society.id == Employee.society_id)
+            .outerjoin(Category, Category.id == Employee.category_id)
+            .outerjoin(
+                EmployeeAttrition,
+                EmployeeAttrition.employee_id == Employee.id,
+            )
+            .where(Employee.id.in_(subordinates_subq))
+            .limit(limit)
+            .offset(offset)
+        )
         res = await self.db.execute(stmt)
-        row = res.first()
+        return res.mappings().all()
+
+    async def get_employee_id_by_oid(self, azure_oid: str) -> int | None:
+
+        try:
+            oid = uuid.UUID(azure_oid)
+        except ValueError:
+            return None
+
+        stmt = select(Employee.id).where(Employee.microsoft_id == oid)
+        res = await self.db.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def get_employee_oid(self, employee_id: int) -> str | None:
+        try:
+            stmt = select(Employee.microsoft_id).where(
+                Employee.id == employee_id
+            )
+            res = await self.db.execute(stmt)
+            row = res.first()
+        except Exception:
+            return None
         return row[0] if row else None
 
     async def get_employee_scores(self, employee_id: int):
@@ -176,6 +251,22 @@ class EmployeeRepo:
                 or_(Salary.end_at.is_(None), Salary.end_at > as_of),
             )
             .order_by(Salary.start_at.asc())
+        )
+        res = await self.db.execute(stmt)
+        return res.scalars().first()
+
+    async def get_employee_attrition_rate(
+        self, employee_id: int, as_of: datetime | None = None
+    ):
+        as_of = as_of or datetime.now(timezone.utc)
+
+        stmt = (
+            select(EmployeeAttrition)
+            .where(
+                EmployeeAttrition.employee_id == employee_id,
+                EmployeeAttrition.calculated_at <= as_of,
+            )
+            .order_by(EmployeeAttrition.calculated_at.desc())
         )
         res = await self.db.execute(stmt)
         return res.scalars().first()

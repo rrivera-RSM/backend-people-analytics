@@ -32,6 +32,27 @@ class EmployeeService:
         )
         return [EmployeeRowOut(**row) for row in rows]
 
+    async def list_rows_by_manager(
+        self,
+        current_user,
+        as_of: datetime | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[EmployeeRowOut]:
+
+        azure_oid = getattr(current_user, "oid", None)
+
+        manager_employee_id = await self.read_repo.get_employee_id_by_oid(
+            azure_oid=azure_oid
+        )
+        rows = await self.read_repo.list_employee_rows_by_manager(
+            manager_employee_id=manager_employee_id,
+            as_of=as_of,
+            limit=limit,
+            offset=offset,
+        )
+        return [EmployeeRowOut(**row) for row in rows]
+
     async def employee_photo(
         self, employee_id: int, authorization: str
     ) -> dict:
@@ -71,3 +92,18 @@ class EmployeeService:
             employee_id=employee_id, as_of=as_of
         )
         return monetary_info
+
+    async def employee_attrition_rate(
+        self, employee_id: int, as_of: datetime | None = None
+    ) -> dict:
+        attrition_info = await self.read_repo.get_employee_attrition_rate(
+            employee_id=employee_id, as_of=as_of
+        )
+        attrition_rate = (
+            attrition_info.attrition_rate if attrition_info else None
+        )
+        attrition_response = {
+            "employee_id": employee_id,
+            "attrition_rate": attrition_rate,
+        }
+        return attrition_response

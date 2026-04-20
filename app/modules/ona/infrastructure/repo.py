@@ -43,9 +43,12 @@ class OnaRepo:
         res = await self.db.execute(stmt)
         return res.scalars().all()
 
-    async def get_ona_active_by_employee_id(
-        self, employee_id: int
-    ):
-        stmt = select(OnaActive).where(OnaActive.employee_id == employee_id)
-        res = await self.db.execute(stmt)
-        return res.scalar_one_or_none()
+    async def get_ona_active_by_employee_id(self, employee_id: int):
+        try:
+            stmt = select(OnaActive).where(
+                OnaActive.employee_id == employee_id
+            )
+            res = await self.db.execute(stmt)
+            return res.scalar_one_or_none()
+        except Exception:
+            return None

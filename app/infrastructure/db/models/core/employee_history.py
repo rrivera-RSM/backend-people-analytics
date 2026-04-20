@@ -34,5 +34,5 @@ class EmployeeHistory(Base):
         ForeignKey("office.id"), nullable=True
     )
     category_id: Mapped[int | None] = mapped_column(
-        ForeignKey("param.id"), nullable=True
+        ForeignKey("category.id"), nullable=True
     )

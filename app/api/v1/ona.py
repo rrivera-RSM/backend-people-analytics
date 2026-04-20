@@ -42,8 +42,7 @@ async def list_ona_relations_by_employee_id(
 
 @ona_router.get(
     "/{employee_id}/active",
-    response_model=OnaActiveOut,
-    response_model_exclude_none=True,
+    response_model=OnaActiveOut | None,
     dependencies=[Depends(azure_scheme)],
 )
 async def get_ona_active_by_employee_id(

@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from app.api.v1.employees import employee_router
 from app.api.v1.ona import ona_router
+from app.api.v1.kpis import kpis_router
+from app.api.v1.app_managers import app_managers_router
 
 from app.auth import get_me, azure_scheme
 from settings import Settings
@@ -111,7 +113,9 @@ async def me(
 
 app.include_router(public)
 app.include_router(protected)
+app.include_router(app_managers_router)
 app.include_router(employee_router)
 app.include_router(ona_router)
+app.include_router(kpis_router)
 
 uvicorn.run(app, host="localhost", port=8000, log_level="debug", reload=False)
