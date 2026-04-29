@@ -13,6 +13,13 @@ from app.modules.app_managers.infrastructure.repo import (
 from app.modules.app_managers.application.services import (
     AppManagerPermissionService,
 )
+from app.modules.employee_insights.infrastructure.repo import (
+    EmployeeInsightRepository,
+)
+
+from app.modules.employee_insights.application.services import (
+    EmployeeInsightService,
+)
 
 
 def get_employee_repo(
@@ -61,3 +68,17 @@ def get_app_manager_permission_service(
     repo: AppManagerPermissionRepo = Depends(get_app_manager_permission_repo),
 ) -> AppManagerPermissionService:
     return AppManagerPermissionService(repo)
+
+
+def get_employee_insight_repository(
+    db: AsyncSession = Depends(get_db),
+) -> EmployeeInsightRepository:
+    return EmployeeInsightRepository(db)
+
+
+def get_employee_insight_service(
+    repo: EmployeeInsightRepository = Depends(
+        get_employee_insight_repository
+    ),
+) -> EmployeeInsightService:
+    return EmployeeInsightService(repo)

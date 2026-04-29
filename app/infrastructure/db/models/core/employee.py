@@ -21,9 +21,6 @@ class Employee(Base):
 
     # ---- Columns ----
     id: Mapped[int] = mapped_column(primary_key=True)
-    external_id: Mapped[str] = mapped_column(
-        String(50), unique=True, nullable=True
-    )
     gender_id: Mapped[Optional[int]] = mapped_column(nullable=True)
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)

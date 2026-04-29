@@ -1,9 +1,20 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, Query, Request, Security, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+    Request,
+    Security,
+    Response,
+    HTTPException,
+)
 
 from app.modules.employees.schemas import EmployeeRowOut
 from app.modules.employees.application.services import EmployeeService
-from app.api.deps import get_employee_service
+from app.modules.employee_insights.application.services import (
+    EmployeeInsightService,
+)
+from app.api.deps import get_employee_service, get_employee_insight_service
 from app.auth import azure_scheme
 
 from app.common.enums import (
@@ -12,6 +23,8 @@ from app.common.enums import (
     OfficeName,
     CategoryType,
 )
+
+from app.modules.employee_insights.schemas import EmployeeInsightsResponseOut
 
 employee_router = APIRouter(
     prefix="/employees",
@@ -130,3 +143,25 @@ async def get_employee_attrition_rate(
     return await service.employee_attrition_rate(
         employee_id=employee_id, as_of=as_of
     )
+
+
+@employee_router.get(
+    "/{employee_id}/insights",
+    dependencies=[Depends(azure_scheme)],
+)
+async def get_employee_insights(
+    employee_id: int,
+    as_of: datetime | None = Query(
+        default=None,
+        description="Fecha de corte opcional para calcular los insights",
+    ),
+    service: EmployeeInsightService = Depends(get_employee_insight_service),
+) -> EmployeeInsightsResponseOut:
+
+    try:
+        return await service.get_employee_insights(
+            employee_id=employee_id,
+            as_of=as_of,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
