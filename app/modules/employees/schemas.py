@@ -9,8 +9,6 @@ class EmployeeRowOut(BaseModel):
     dni: str
     email: str
 
-    category_name: str | None = None
-
     office_id: int | None = None
     office_name: str | None = None
 
@@ -20,6 +18,8 @@ class EmployeeRowOut(BaseModel):
     society_id: int | None = None
     society_name: str | None = None
 
+    category_id: int | None = None
+    category_name: str | None = None
     attrition_rate: float | None = None
 
     joined_at: datetime

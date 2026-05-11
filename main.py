@@ -9,6 +9,7 @@ from app.api.v1.employees import employee_router
 from app.api.v1.ona import ona_router
 from app.api.v1.kpis import kpis_router
 from app.api.v1.app_managers import app_managers_router
+from app.api.v1.evaluations import router as evaluations_router
 
 from app.auth import get_me, azure_scheme
 from settings import Settings
@@ -117,5 +118,6 @@ app.include_router(app_managers_router)
 app.include_router(employee_router)
 app.include_router(ona_router)
 app.include_router(kpis_router)
+app.include_router(evaluations_router)
 
 uvicorn.run(app, host="localhost", port=8000, log_level="debug", reload=False)
