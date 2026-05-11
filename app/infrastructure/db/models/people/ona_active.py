@@ -24,6 +24,7 @@ class OnaActive(Base):
     employee_id: Mapped[int] = mapped_column(nullable=False)
     ona_category_id: Mapped[int] = mapped_column(nullable=False)
     ona_influence_id: Mapped[int] = mapped_column(nullable=False)
+    overall_percentile: Mapped[float] = mapped_column(nullable=False)
     percentile_1: Mapped[float] = mapped_column(nullable=False)
     percentile_2: Mapped[float] = mapped_column(nullable=False)
     percentile_3: Mapped[float] = mapped_column(nullable=False)

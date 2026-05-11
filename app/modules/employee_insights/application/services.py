@@ -88,6 +88,12 @@ class EmployeeInsightService:
                 features=features,
             )
         )
+        insights.extend(
+            self._build_ona_and_performance_insights(
+                context=context,
+                features=features,
+            )
+        )
 
         if not context.current_evaluation:
             warnings.append(
@@ -209,6 +215,9 @@ class EmployeeInsightService:
             ona_percentile_2=ona_aggregates["ona_percentile_2"],
             ona_percentile_3=ona_aggregates["ona_percentile_3"],
             ona_percentile_4=ona_aggregates["ona_percentile_4"],
+            ona_primary_category=ona_insight_aggregates[
+                "ona_primary_category"
+            ],
             degree_centrality=ona_aggregates["degree_centrality"],
             closeness_centrality=ona_aggregates["closeness_centrality"],
             betweenness_centrality=ona_aggregates["betweenness_centrality"],
@@ -308,6 +317,7 @@ class EmployeeInsightService:
             return {
                 "ona_insight_record_count": 0,
                 "ona_insight_categories": [],
+                "ona_primary_category": None,
                 "n_different_categories_in": None,
                 "n_same_category_in": None,
                 "n_upper_categories_in": None,
@@ -316,19 +326,31 @@ class EmployeeInsightService:
                 "percentile_80_votes_dpt_office": None,
             }
 
+        category_priority = {
+            "central": 1,
+            "hipo": 2,
+            "intermediary": 3,
+            "peripheral": 4,
+        }
+
+        categories = sorted(
+            {record.ona_category for record in records if record.ona_category}
+        )
+
+        primary_category = (
+            min(categories, key=lambda c: category_priority.get(c, 999))
+            if categories
+            else None
+        )
+
         def max_decimal(values: list[Decimal | None]) -> float | None:
             not_none = [float(v) for v in values if v is not None]
             return round(max(not_none), 2) if not_none else None
 
         return {
             "ona_insight_record_count": len(records),
-            "ona_insight_categories": sorted(
-                {
-                    record.ona_category
-                    for record in records
-                    if record.ona_category
-                }
-            ),
+            "ona_insight_categories": categories,
+            "ona_primary_category": primary_category,
             "n_different_categories_in": max_decimal(
                 [record.n_different_categories_in for record in records]
             ),
@@ -732,6 +754,101 @@ class EmployeeInsightService:
                         "ona_percentile_4": features.ona_percentile_4,
                         "threshold": self.rules.high_ona_percentile,
                     },
+                )
+            )
+
+        return insights
+
+    def _build_ona_and_performance_insights(
+        self,
+        context: EmployeeInsightContext,
+        features: EmployeeInsightFeaturesOut,
+    ) -> list[EmployeeInsightItemOut]:
+
+        insights: list[EmployeeInsightItemOut] = []
+
+        score = features.current_evaluation_score_normalized
+        ona_category = features.ona_primary_category
+
+        if score is None or ona_category is None:
+            return insights
+
+        evidence = {
+            "current_evaluation_at": features.current_evaluation_at,
+            "current_score_normalized": score,
+            "ona_primary_category": ona_category,
+            "threshold": self.rules.high_performance_score,
+        }
+
+        if (
+            score >= self.rules.high_performance_score
+            and ona_category == "central"
+        ):
+            insights.append(
+                EmployeeInsightItemOut(
+                    code=InsightCode.HIGH_TALENT,
+                    family=InsightFamily.TALENT,
+                    title="Alto Talento",
+                    description=(
+                        "El empleado combina un desempeño alto con una posición "
+                        "central dentro de la red organizativa."
+                    ),
+                    priority=15,
+                    evidence=evidence,
+                )
+            )
+
+        elif (
+            score >= self.rules.high_performance_score
+            and ona_category == "hipo"
+        ):
+            insights.append(
+                EmployeeInsightItemOut(
+                    code=InsightCode.HIGH_POTENTIAL,
+                    family=InsightFamily.TALENT,
+                    title="Alto Potencial",
+                    description=(
+                        "El empleado presenta desempeño alto y una clasificación "
+                        "ONA consistente con alto potencial."
+                    ),
+                    priority=16,
+                    evidence=evidence,
+                )
+            )
+
+        elif score < self.rules.high_performance_score and ona_category in {
+            "central",
+            "hipo",
+        }:
+            insights.append(
+                EmployeeInsightItemOut(
+                    code=InsightCode.HIGH_UNDERRECOGNIZED,
+                    family=InsightFamily.TALENT,
+                    title="Alto Infrareconocido",
+                    description=(
+                        "El empleado presenta una posición ONA fuerte, pero su "
+                        "desempeño actual no alcanza el umbral alto."
+                    ),
+                    priority=17,
+                    evidence=evidence,
+                )
+            )
+
+        elif score >= self.rules.high_performance_score and ona_category in {
+            "intermediary",
+            "peripheral",
+        }:
+            insights.append(
+                EmployeeInsightItemOut(
+                    code=InsightCode.HIGH_PERFORMER,
+                    family=InsightFamily.TALENT,
+                    title="Alto Rendimiento",
+                    description=(
+                        "El empleado presenta desempeño alto con una clasificación "
+                        "ONA de tipo intermediary o peripheral."
+                    ),
+                    priority=18,
+                    evidence=evidence,
                 )
             )
 

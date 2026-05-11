@@ -17,6 +17,7 @@ from app.infrastructure.db.models.people.ona_insights import OnaInsights
 class InsightFamily(str, Enum):
     PERFORMANCE = "performance"
     ONA = "ona"
+    TALENT = "talent"
 
 
 class InsightCode(str, Enum):
@@ -50,6 +51,12 @@ class InsightCode(str, Enum):
     ACTIVE_INFLUENCE_AT = "active_influence_at"
     ACTIVE_INFLUENCE_AP = "active_influence_ap"
     ACTIVE_INFLUENCE_IN = "active_influence_in"
+
+    # --- Desempeño combinado con ONA ---
+    HIGH_TALENT = "high_talent"
+    HIGH_POTENTIAL = "high_potential"
+    HIGH_UNDERRECOGNIZED = "high_underrecognized"
+    HIGH_PERFORMER = "high_performer"
 
 
 class EmployeeInsightItemOut(BaseModel):
@@ -86,6 +93,8 @@ class EmployeeInsightFeaturesOut(BaseModel):
     ona_percentile_2: float | None = None
     ona_percentile_3: float | None = None
     ona_percentile_4: float | None = None
+
+    ona_primary_category: str | None = None
 
     degree_centrality: float | None = None
     closeness_centrality: float | None = None

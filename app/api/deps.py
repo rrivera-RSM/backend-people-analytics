@@ -21,6 +21,13 @@ from app.modules.employee_insights.application.services import (
     EmployeeInsightService,
 )
 
+from app.modules.evaluations.infrastructure.repo import (
+    EvaluationScatterRepository,
+)
+from app.modules.evaluations.application.services import (
+    EvaluationScatterService,
+)
+
 
 def get_employee_repo(
     db: AsyncSession = Depends(get_db),
@@ -82,3 +89,15 @@ def get_employee_insight_service(
     ),
 ) -> EmployeeInsightService:
     return EmployeeInsightService(repo)
+
+
+def get_evaluation_scatter_repo(
+    db: AsyncSession = Depends(get_db),
+) -> EvaluationScatterRepository:
+    return EvaluationScatterRepository(db)
+
+
+def get_evaluation_scatter_service(
+    repo: EvaluationScatterRepository = Depends(get_evaluation_scatter_repo),
+) -> EvaluationScatterService:
+    return EvaluationScatterService(repo)
