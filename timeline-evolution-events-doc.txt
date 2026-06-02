@@ -1,0 +1,97 @@
+Mini documentación frontend
+Endpoint: GET /employees/{employee_id}/timeline-evolution
+
+1) Respuesta base
+{
+  "employee_id": 123,
+  "employee_name": "Nombre Apellido",
+  "joined_at": "2020-01-15T00:00:00Z",
+  "left_at": null,
+  "total_events": 8,
+  "events": []
+}
+
+Campos:
+- employee_id: number
+- employee_name: string
+- joined_at: string (ISO datetime) | null
+- left_at: string (ISO datetime) | null
+- total_events: number
+- events: EmployeeTimelineEvent[] (orden cronológico ascendente)
+
+2) Estructura común de evento
+{
+  "event_type": "org_change",
+  "event_at": "2021-03-01T00:00:00Z",
+  "title": "Cambio organizativo",
+  "payload": {}
+}
+
+Campos:
+- event_type: string
+- event_at: string (ISO datetime, normalizado UTC)
+- title: string
+- payload: object (varía por tipo)
+
+Nota general:
+- Los campos numéricos con valor `0.0` se omiten del payload porque representan ausencia de dato.
+
+3) Tipos de evento soportados
+
+3.1) org_change
+Describe cambios organizativos (sociedad/departamento/oficina/categoría).
+
+Payload:
+{
+  "start_at": "2021-03-01T00:00:00+00:00",
+  "end_at": "2022-06-30T00:00:00+00:00",
+  "society_id": 2,
+  "society_name": "RSM SPAIN CONSULTORES, SL",
+  "department_id": 10,
+  "department_name": "AUDITORÍA",
+  "office_id": 1,
+  "office_name": "Madrid",
+  "category_id": 4,
+  "category_name": "Senior"
+}
+
+Notas:
+- Cualquier *_id o *_name puede venir null.
+- end_at puede ser null si el tramo sigue vigente.
+
+3.2) salary_change
+Describe cambios retributivos.
+
+Payload:
+{
+  "start_at": "2022-01-01T00:00:00+00:00",
+  "end_at": null,
+  "salary": 42000.0,
+  "bonus": 3000.0
+}
+
+Notas:
+- bonus puede venir null.
+- salary siempre numérico.
+- Si `salary` o `bonus` valen `0.0`, la clave no se devuelve.
+
+3.3) evaluation
+Describe evaluaciones de desempeño.
+
+Payload:
+{
+  "evaluation_at": "2023-12-15T00:00:00+00:00",
+  "final_score": 4.2,
+  "bol_positive_impact": 1.0
+}
+
+Notas:
+- bol_positive_impact puede venir null si no hay dato asociado para ese ciclo.
+- final_score siempre numérico.
+- Si `final_score` o `bol_positive_impact` valen `0.0`, la clave no se devuelve.
+
+4) Recomendación para frontend
+- Pintar por event_type (switch renderer).
+- Usar event_at como fecha principal del timeline.
+- Mostrar title como etiqueta corta.
+- Renderizar payload con componentes específicos por tipo.

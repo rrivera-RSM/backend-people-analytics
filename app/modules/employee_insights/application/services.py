@@ -188,6 +188,7 @@ class EmployeeInsightService:
             context.employee.left_at is None
             or context.employee.left_at > as_of
         )
+        category = getattr(context.employee, "category_name", None)
 
         return EmployeeInsightFeaturesOut(
             employee_active=employee_active,
@@ -201,6 +202,7 @@ class EmployeeInsightService:
                 if context.previous_evaluation
                 else None
             ),
+            category=category,
             current_evaluation_score_raw=current_score_raw,
             previous_evaluation_score_raw=previous_score_raw,
             current_evaluation_score_normalized=current_score_normalized,
@@ -245,6 +247,24 @@ class EmployeeInsightService:
             incoming_unique_relations=context.incoming_unique_relations,
             outgoing_unique_relations=context.outgoing_unique_relations,
             unique_relations=context.unique_relations,
+            influence=ona_insight_aggregates["influence"],
+            n_lower_categories_in=ona_insight_aggregates[
+                "n_lower_categories_in"
+            ],
+            p80_n_different_categories_in=ona_insight_aggregates[
+                "p80_n_different_categories_in"
+            ],
+            p80_n_different_departments_in=ona_insight_aggregates[
+                "p80_n_different_departments_in"
+            ],
+            n_respuestas=ona_insight_aggregates["n_respuestas"],
+            tasa_respuestas=ona_insight_aggregates["tasa_respuestas"],
+            n_same_dept_office_in_no_ci=ona_insight_aggregates[
+                "n_same_dept_office_in_no_ci"
+            ],
+            p80_n_same_dept_office_in_no_ci=ona_insight_aggregates[
+                "p80_n_same_dept_office_in_no_ci"
+            ],
         )
 
     def _aggregate_ona_records(self, records: list[Any]) -> dict[str, Any]:
@@ -313,19 +333,44 @@ class EmployeeInsightService:
         self,
         records: list[Any],
     ) -> dict[str, Any]:
-        if not records:
-            return {
-                "ona_insight_record_count": 0,
-                "ona_insight_categories": [],
-                "ona_primary_category": None,
-                "n_different_categories_in": None,
-                "n_same_category_in": None,
-                "n_upper_categories_in": None,
-                "n_different_departments_in": None,
-                "n_total_votes_in": None,
-                "percentile_80_votes_dpt_office": None,
-            }
+        """
+        Agrega registros de people.ona_insights.
+        En v2: cuando hay múltiples registros, se agregan por máximos (criterio conservador).
+        - Métricas del empleado: max
+        - Percentiles/umbrales de referencia (p80_*): max (evita falsos positivos)
+        """
 
+        # Base “vacía” con TODOS los campos que el service/insights pueden consumir
+        empty = {
+            "ona_insight_record_count": 0,
+            "ona_insight_categories": [],
+            "ona_primary_category": None,
+            # gating / clasificación
+            "influence": None,
+            # core metrics
+            "n_different_categories_in": None,
+            "n_same_category_in": None,
+            "n_upper_categories_in": None,
+            "n_lower_categories_in": None,
+            "n_different_departments_in": None,
+            # calidad / participación
+            "n_respuestas": None,
+            "tasa_respuestas": None,
+            # referencia equipo (dept-office)
+            "n_same_dept_office_in_no_ci": None,
+            "p80_n_same_dept_office_in_no_ci": None,
+            # referencia percentiles globales
+            "p80_n_different_categories_in": None,
+            "p80_n_different_departments_in": None,
+            # legacy (si aún lo necesitas en otros lados)
+            "n_total_votes_in": None,
+            "percentile_80_votes_dpt_office": None,
+        }
+
+        if not records:
+            return empty
+
+        # Prioridad para escoger “categoría principal” (lo más fuerte primero)
         category_priority = {
             "central": 1,
             "hipo": 2,
@@ -333,8 +378,43 @@ class EmployeeInsightService:
             "peripheral": 4,
         }
 
+        # ------------- helpers -------------
+        def _get(record: Any, field: str) -> Any:
+            # Evita reventar si algún campo todavía no existe en el modelo/SQL
+            return getattr(record, field, None)
+
+        def max_decimal_field(field: str) -> float | None:
+            values: list[float] = []
+            for r in records:
+                v = _get(r, field)
+                if v is None:
+                    continue
+                # Decimal / int / float -> float
+                try:
+                    values.append(float(v))
+                except (TypeError, ValueError):
+                    continue
+            return round(max(values), 2) if values else None
+
+        def max_float_field(field: str, ndigits: int = 2) -> float | None:
+            values: list[float] = []
+            for r in records:
+                v = _get(r, field)
+                if v is None:
+                    continue
+                try:
+                    values.append(float(v))
+                except (TypeError, ValueError):
+                    continue
+            return round(max(values), ndigits) if values else None
+
+        # ------------- categorías -------------
         categories = sorted(
-            {record.ona_category for record in records if record.ona_category}
+            {
+                (_get(r, "ona_category") or "").strip()
+                for r in records
+                if _get(r, "ona_category")
+            }
         )
 
         primary_category = (
@@ -343,33 +423,69 @@ class EmployeeInsightService:
             else None
         )
 
-        def max_decimal(values: list[Decimal | None]) -> float | None:
-            not_none = [float(v) for v in values if v is not None]
-            return round(max(not_none), 2) if not_none else None
+        # “influence”:
+        # - ideal: un campo explícito record.influence
+        # - fallback: usar la categoría principal (central/hipo/...)
+        influence_values = sorted(
+            {
+                (_get(r, "influence") or "").strip()
+                for r in records
+                if _get(r, "influence")
+            }
+        )
+        influence = (
+            min(influence_values, key=lambda c: category_priority.get(c, 999))
+            if influence_values
+            else primary_category
+        )
 
-        return {
+        # ------------- agregación -------------
+        aggregated = {
             "ona_insight_record_count": len(records),
             "ona_insight_categories": categories,
             "ona_primary_category": primary_category,
-            "n_different_categories_in": max_decimal(
-                [record.n_different_categories_in for record in records]
+            "influence": influence,
+            # core metrics (max)
+            "n_different_categories_in": max_decimal_field(
+                "n_different_categories_in"
             ),
-            "n_same_category_in": max_decimal(
-                [record.n_same_category_in for record in records]
+            "n_same_category_in": max_decimal_field("n_same_category_in"),
+            "n_upper_categories_in": max_decimal_field(
+                "n_upper_categories_in"
             ),
-            "n_upper_categories_in": max_decimal(
-                [record.n_upper_categories_in for record in records]
+            "n_lower_categories_in": max_decimal_field(
+                "n_lower_categories_in"
             ),
-            "n_different_departments_in": max_decimal(
-                [record.n_different_departments_in for record in records]
+            "n_different_departments_in": max_decimal_field(
+                "n_different_departments_in"
             ),
-            "n_total_votes_in": max_decimal(
-                [record.n_total_votes_in for record in records]
+            # calidad / participación (max; si tasa es 0..1 la dejamos tal cual, no normalizamos aquí)
+            "n_respuestas": max_decimal_field("n_respuestas"),
+            "tasa_respuestas": max_float_field("tasa_respuestas", ndigits=4),
+            # equipo dept-office
+            "n_same_dept_office_in_no_ci": max_decimal_field(
+                "n_same_dept_office_in_no_ci"
             ),
-            "percentile_80_votes_dpt_office": max_decimal(
-                [record.percentile_80_votes_dpt_office for record in records]
+            "p80_n_same_dept_office_in_no_ci": max_decimal_field(
+                "p80_n_same_dept_office_in_no_ci"
+            ),
+            # percentiles de referencia (conservador: max)
+            "p80_n_different_categories_in": max_decimal_field(
+                "p80_n_different_categories_in"
+            ),
+            "p80_n_different_departments_in": max_decimal_field(
+                "p80_n_different_departments_in"
+            ),
+            # legacy
+            "n_total_votes_in": max_decimal_field("n_total_votes_in"),
+            "percentile_80_votes_dpt_office": max_decimal_field(
+                "percentile_80_votes_dpt_office"
             ),
         }
+
+        # Asegura que devolvemos todas las keys aunque algún campo falte
+        empty.update(aggregated)
+        return empty
 
     # ------------------------------------------------------------------
     # Rule engine - PERFORMANCE
@@ -512,130 +628,94 @@ class EmployeeInsightService:
         if features.ona_insight_record_count == 0:
             return insights
 
-        # 1) Liderazgo Transversal Fuerte / Influencia Transversal
+        category = features.category
+
+        is_socio = category == "Socio" or category is None
+        is_estructura = category == "Estructura"
+        is_socio_or_estructura = is_socio or is_estructura
+
+        def ge(
+            value: float | int | None, threshold: float | int | None
+        ) -> bool:
+            return (
+                value is not None
+                and threshold is not None
+                and value >= threshold
+            )
+
+        def gt(
+            value: float | int | None, threshold: float | int | None
+        ) -> bool:
+            return (
+                value is not None
+                and threshold is not None
+                and value > threshold
+            )
+
+        # 1) Influencia en niveles superiores
+        #
+        # Pseudocódigo:
+        # mask_influ_a = (
+        #     ~socio
+        #     & (df["n_upper_categories_in"] >= 2)
+        # )
         if (
-            features.n_different_categories_in is not None
-            and features.n_different_categories_in
-            >= self.rules.strong_transversal_leadership_threshold
+            not is_socio
+            and features.n_upper_categories_in is not None
+            and features.n_upper_categories_in >= 2
         ):
             insights.append(
                 EmployeeInsightItemOut(
-                    code=InsightCode.STRONG_TRANSVERSAL_LEADERSHIP,
+                    code=InsightCode.UPPER_LEVEL_INFLUENCE,
                     family=InsightFamily.ONA,
-                    title="Liderazgo transversal fuerte",
+                    title="Influencia en niveles superiores",
                     description=(
-                        "Profesional que genera impacto en distintos niveles "
-                        "de la organización. Refleja liderazgo amplio, "
-                        "capacidad de adaptación y reconocimiento global."
+                        "Este empleado genera reconocimiento en niveles organizativos "
+                        "superiores, lo que indica credibilidad y capacidad de impacto "
+                        "por encima de su posición formal actual. Es una señal relevante "
+                        "de confianza ascendente y posible proyección hacia mayores "
+                        "niveles de responsabilidad."
                     ),
                     priority=40,
                     evidence={
-                        "n_different_categories_in": features.n_different_categories_in,
-                        "threshold": self.rules.strong_transversal_leadership_threshold,
-                        "ona_insight_categories": features.ona_insight_categories,
-                    },
-                )
-            )
-        elif (
-            features.n_different_categories_in is not None
-            and features.n_different_categories_in
-            >= self.rules.transversal_influence_threshold
-        ):
-            insights.append(
-                EmployeeInsightItemOut(
-                    code=InsightCode.TRANSVERSAL_INFLUENCE,
-                    family=InsightFamily.ONA,
-                    title="Influencia transversal",
-                    description=(
-                        "Profesional con reconocimiento en distintas categorías "
-                        "o niveles de la organización."
-                    ),
-                    priority=45,
-                    evidence={
-                        "n_different_categories_in": features.n_different_categories_in,
-                        "threshold": self.rules.transversal_influence_threshold,
-                        "ona_insight_categories": features.ona_insight_categories,
-                    },
-                )
-            )
-
-        # 2) Influencia lateral
-        if (
-            features.n_same_category_in is not None
-            and features.n_same_category_in
-            >= self.rules.lateral_influence_threshold
-        ):
-            insights.append(
-                EmployeeInsightItemOut(
-                    code=InsightCode.LATERAL_INFLUENCE,
-                    family=InsightFamily.ONA,
-                    title="Influencia lateral",
-                    description=(
-                        "Profesional con fuerte reconocimiento dentro de su "
-                        "mismo nivel o niveles cercanos."
-                    ),
-                    priority=50,
-                    evidence={
-                        "n_same_category_in": features.n_same_category_in,
-                        "threshold": self.rules.lateral_influence_threshold,
-                    },
-                )
-            )
-
-        # 3) Influencia ascendente
-        if (
-            features.n_upper_categories_in is not None
-            and features.n_upper_categories_in
-            >= self.rules.upward_influence_threshold
-        ):
-            insights.append(
-                EmployeeInsightItemOut(
-                    code=InsightCode.UPWARD_INFLUENCE,
-                    family=InsightFamily.ONA,
-                    title="Influencia ascendente",
-                    description=(
-                        "Profesional cuya influencia es reconocida por niveles "
-                        "superiores al suyo. Indica capacidad de generar impacto "
-                        "más allá de su posición actual."
-                    ),
-                    priority=55,
-                    evidence={
+                        "formula_description": (
+                            "Se identifica cuando el empleado recibe relaciones entrantes "
+                            "desde dos o más personas pertenecientes a categorías "
+                            "organizativas superiores a la suya."
+                        ),
+                        "category": features.category,
                         "n_upper_categories_in": features.n_upper_categories_in,
-                        "threshold": self.rules.upward_influence_threshold,
+                        "threshold": 2,
+                        "excluded_categories": ["Socio", None],
                     },
                 )
             )
 
-        # 4) Persona puente
+        # 2) Alta confianza del equipo
+        #
+        # Pseudocódigo:
+        # mask_alta_conf = (
+        #     ~socio
+        #     & (df["n_respuestas"] >= 3)
+        #     & (df["tasa_respuestas"] >= 0.4)
+        #     & (df["n_same_dept_office_in_no_ci"] >= 2)
+        #     & (
+        #         df["n_same_dept_office_in_no_ci"]
+        #         >= df["p80_n_same_dept_office_in_no_ci"]
+        #     )
+        # )
         if (
-            features.n_different_departments_in is not None
-            and features.n_different_departments_in
-            >= self.rules.bridge_person_threshold
-        ):
-            insights.append(
-                EmployeeInsightItemOut(
-                    code=InsightCode.BRIDGE_PERSON,
-                    family=InsightFamily.ONA,
-                    title="Persona puente",
-                    description=(
-                        "Profesional que conecta distintos equipos o áreas "
-                        "dentro de la organización, facilitando la colaboración "
-                        "transversal y el flujo de información."
-                    ),
-                    priority=60,
-                    evidence={
-                        "n_different_departments_in": features.n_different_departments_in,
-                        "threshold": self.rules.bridge_person_threshold,
-                    },
-                )
+            not is_socio
+            and features.n_respuestas is not None
+            and features.n_respuestas >= 3
+            and features.tasa_respuestas is not None
+            and features.tasa_respuestas >= 0.4
+            and features.n_same_dept_office_in_no_ci is not None
+            and features.n_same_dept_office_in_no_ci >= 2
+            and ge(
+                features.n_same_dept_office_in_no_ci,
+                features.p80_n_same_dept_office_in_no_ci,
             )
-
-        # 5) Alta confianza del equipo
-        if (
-            features.n_total_votes_in is not None
-            and features.percentile_80_votes_dpt_office is not None
-            and features.n_total_votes_in
-            >= features.percentile_80_votes_dpt_office
         ):
             insights.append(
                 EmployeeInsightItemOut(
@@ -643,16 +723,259 @@ class EmployeeInsightService:
                     family=InsightFamily.ONA,
                     title="Alta confianza del equipo",
                     description=(
-                        "Profesional con alto nivel de reconocimiento global "
-                        "dentro del equipo. Refleja confianza, visibilidad "
-                        "y relevancia en el día a día."
+                        "Este empleado concentra un alto nivel de reconocimiento dentro "
+                        "de su entorno. Es una señal de confianza, visibilidad y "
+                        "relevancia en el día a día del equipo."
+                    ),
+                    priority=45,
+                    evidence={
+                        "formula_description": (
+                            "Se identifica cuando el empleado recibe dos o más "
+                            "nominaciones dentro de su propio equipo, Departamento y "
+                            "Oficina, y se sitúa entre el 20% de personas más reconocidas "
+                            "de su grupo de referencia Departamento-Oficina."
+                        ),
+                        "category": features.category,
+                        "n_respuestas": features.n_respuestas,
+                        "tasa_respuestas": features.tasa_respuestas,
+                        "n_same_dept_office_in_no_ci": (
+                            features.n_same_dept_office_in_no_ci
+                        ),
+                        "p80_n_same_dept_office_in_no_ci": (
+                            features.p80_n_same_dept_office_in_no_ci
+                        ),
+                        "min_n_respuestas": 3,
+                        "min_tasa_respuestas": 0.4,
+                        "min_n_same_dept_office_in_no_ci": 2,
+                        "excluded_categories": ["Socio", None],
+                    },
+                )
+            )
+
+        # 3) Liderazgo transversal
+        #
+        # Pseudocódigo:
+        # mask_influ_tf = (
+        #     ~socio
+        #     & df["influence"].isin(["central", "hipo"])
+        #     & (df["n_different_categories_in"] >= 3)
+        #     & (
+        #         df["n_different_categories_in"]
+        #         >= df["p80_n_different_categories_in"]
+        #     )
+        # )
+        if (
+            not is_socio
+            and features.influence in {"central", "hipo"}
+            and features.n_different_categories_in is not None
+            and features.n_different_categories_in >= 3
+            and ge(
+                features.n_different_categories_in,
+                features.p80_n_different_categories_in,
+            )
+        ):
+            insights.append(
+                EmployeeInsightItemOut(
+                    code=InsightCode.TRANSVERSAL_LEADERSHIP,
+                    family=InsightFamily.ONA,
+                    title="Liderazgo transversal",
+                    description=(
+                        "Este empleado concentra reconocimiento desde múltiples niveles "
+                        "o colectivos de la organización, lo que sugiere una capacidad "
+                        "de liderazgo que trasciende de su entorno directo. Es una señal "
+                        "de influencia transversal, credibilidad interna y capacidad "
+                        "para generar impacto en distintos segmentos organizativos."
+                    ),
+                    priority=50,
+                    evidence={
+                        "formula_description": (
+                            "Se activa cuando el empleado recibe relaciones entrantes "
+                            "desde tres o más categorías organizativas distintas y, "
+                            "además, se sitúa entre el 20% con más conexiones dentro "
+                            "de su grupo de referencia Departamento-Oficina."
+                        ),
+                        "category": features.category,
+                        "influence": features.influence,
+                        "valid_influence_values": ["central", "hipo"],
+                        "n_different_categories_in": features.n_different_categories_in,
+                        "p80_n_different_categories_in": (
+                            features.p80_n_different_categories_in
+                        ),
+                        "min_n_different_categories_in": 3,
+                        "excluded_categories": ["Socio", None],
+                    },
+                )
+            )
+
+        # 4) Influencia en niveles inferiores
+        #
+        # Pseudocódigo:
+        # mask_influ_d = (
+        #     ~socio
+        #     & (df["n_lower_categories_in"] >= 3)
+        # )
+        if (
+            not is_socio
+            and features.n_lower_categories_in is not None
+            and features.n_lower_categories_in >= 3
+        ):
+            insights.append(
+                EmployeeInsightItemOut(
+                    code=InsightCode.LOWER_LEVEL_INFLUENCE,
+                    family=InsightFamily.ONA,
+                    title="Influencia en niveles inferiores",
+                    description=(
+                        "Este empleado genera reconocimiento en niveles organizativos "
+                        "inferiores, lo que refleja capacidad de influencia, cercanía "
+                        "y referencia profesional."
+                    ),
+                    priority=55,
+                    evidence={
+                        "formula_description": (
+                            "Se identifica cuando el empleado recibe relaciones entrantes "
+                            "desde tres o más personas pertenecientes a categorías "
+                            "organizativas inferiores a la suya."
+                        ),
+                        "category": features.category,
+                        "n_lower_categories_in": features.n_lower_categories_in,
+                        "threshold": 3,
+                        "excluded_categories": ["Socio", None],
+                    },
+                )
+            )
+
+        # 5) Conector de equipo
+        #
+        # Pseudocódigo:
+        # mask_influ_t = (
+        #     ~socio
+        #     & (df["n_different_categories_in"] >= 2)
+        #     & (
+        #         df["n_different_categories_in"]
+        #         >= df["p80_n_different_categories_in"]
+        #     )
+        # )
+        if (
+            not is_socio
+            and features.n_different_categories_in is not None
+            and features.n_different_categories_in >= 2
+            and ge(
+                features.n_different_categories_in,
+                features.p80_n_different_categories_in,
+            )
+        ):
+            insights.append(
+                EmployeeInsightItemOut(
+                    code=InsightCode.TEAM_CONNECTOR,
+                    family=InsightFamily.ONA,
+                    title="Conector de equipo",
+                    description=(
+                        "Este empleado ayuda a conectar personas dentro del equipo. "
+                        "Puede actuar como punto de apoyo informal para que la "
+                        "información y la colaboración fluyan mejor."
+                    ),
+                    priority=60,
+                    evidence={
+                        "formula_description": (
+                            "Se activa cuando el empleado recibe relaciones entrantes "
+                            "desde al menos dos categorías organizativas distintas y "
+                            "se sitúa entre el 20% de personas con más conexiones "
+                            "dentro de su grupo de referencia Departamento-Oficina."
+                        ),
+                        "category": features.category,
+                        "n_different_categories_in": features.n_different_categories_in,
+                        "p80_n_different_categories_in": (
+                            features.p80_n_different_categories_in
+                        ),
+                        "min_n_different_categories_in": 2,
+                        "excluded_categories": ["Socio", None],
+                    },
+                )
+            )
+
+        # 6) Conector organizativo
+        #
+        # Pseudocódigo:
+        # mask_influ_p = (
+        #     ~socio
+        #     & (df["n_different_departments_in"] >= 2)
+        #     & (
+        #         df["n_different_departments_in"]
+        #         >= df["p80_n_different_departments_in"]
+        #     )
+        # )
+        if (
+            not is_socio
+            and features.n_different_departments_in is not None
+            and features.n_different_departments_in >= 2
+            and ge(
+                features.n_different_departments_in,
+                features.p80_n_different_departments_in,
+            )
+        ):
+            insights.append(
+                EmployeeInsightItemOut(
+                    code=InsightCode.ORGANIZATIONAL_CONNECTOR,
+                    family=InsightFamily.ONA,
+                    title="Conector organizativo",
+                    description=(
+                        "Este empleado conecta diferentes áreas o departamentos. "
+                        "Puede ser clave para facilitar colaboración, circulación "
+                        "de información y coordinación transversal."
                     ),
                     priority=65,
                     evidence={
-                        "n_total_votes_in": features.n_total_votes_in,
-                        "percentile_80_votes_dpt_office": (
-                            features.percentile_80_votes_dpt_office
+                        "formula_description": (
+                            "Se identifica cuando el empleado recibe relaciones "
+                            "entrantes desde dos o más departamentos distintos y se "
+                            "sitúa entre el 20% de personas con más conexiones dentro "
+                            "de su grupo de referencia Departamento-Oficina."
                         ),
+                        "category": features.category,
+                        "n_different_departments_in": features.n_different_departments_in,
+                        "p80_n_different_departments_in": (
+                            features.p80_n_different_departments_in
+                        ),
+                        "min_n_different_departments_in": 2,
+                        "excluded_categories": ["Socio", None],
+                    },
+                )
+            )
+
+        # 7) Referente en su nivel
+        #
+        # Pseudocódigo:
+        # socio_estructura = socio | (df["category"] == "Estructura")
+        # mask_influ_l = (
+        #     ~socio_estructura
+        #     & (df["n_same_category_in"] >= 2)
+        # )
+        if (
+            not is_socio_or_estructura
+            and features.n_same_category_in is not None
+            and features.n_same_category_in >= 2
+        ):
+            insights.append(
+                EmployeeInsightItemOut(
+                    code=InsightCode.PEER_LEVEL_INFLUENCE,
+                    family=InsightFamily.ONA,
+                    title="Referente en su nivel",
+                    description=(
+                        "Este empleado tiene una influencia fuerte entre personas "
+                        "de su mismo nivel o niveles cercanos. Puede ser una "
+                        "referencia natural para sus pares."
+                    ),
+                    priority=70,
+                    evidence={
+                        "formula_description": (
+                            "Se identifica cuando el empleado recibe relaciones "
+                            "entrantes desde dos o más personas de su misma categoría "
+                            "organizativa o categorías equivalentes."
+                        ),
+                        "category": features.category,
+                        "n_same_category_in": features.n_same_category_in,
+                        "threshold": 2,
+                        "excluded_categories": ["Socio", "Estructura", None],
                     },
                 )
             )

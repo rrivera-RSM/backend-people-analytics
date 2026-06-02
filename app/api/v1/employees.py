@@ -9,7 +9,10 @@ from fastapi import (
     HTTPException,
 )
 
-from app.modules.employees.schemas import EmployeeRowOut
+from app.modules.employees.schemas import (
+    EmployeeRowOut,
+    EmployeeTimelineEvolutionOut,
+)
 from app.modules.employees.application.services import EmployeeService
 from app.modules.employee_insights.application.services import (
     EmployeeInsightService,
@@ -143,6 +146,18 @@ async def get_employee_attrition_rate(
     return await service.employee_attrition_rate(
         employee_id=employee_id, as_of=as_of
     )
+
+
+@employee_router.get(
+    "/{employee_id}/timeline-evolution",
+    response_model=EmployeeTimelineEvolutionOut,
+    dependencies=[Depends(azure_scheme)],
+)
+async def get_employee_timeline_evolution(
+    employee_id: int,
+    service: EmployeeService = Depends(get_employee_service),
+):
+    return await service.employee_timeline_evolution(employee_id=employee_id)
 
 
 @employee_router.get(

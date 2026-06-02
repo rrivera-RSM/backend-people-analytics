@@ -23,3 +23,20 @@ class EmployeeRowOut(BaseModel):
     attrition_rate: float | None = None
 
     joined_at: datetime
+    birth_date: datetime | None = None
+
+
+class EmployeeTimelineEventOut(BaseModel):
+    event_type: str
+    event_at: datetime
+    title: str
+    payload: dict
+
+
+class EmployeeTimelineEvolutionOut(BaseModel):
+    employee_id: int
+    employee_name: str
+    joined_at: datetime | None = None
+    left_at: datetime | None = None
+    total_events: int
+    events: list[EmployeeTimelineEventOut]
