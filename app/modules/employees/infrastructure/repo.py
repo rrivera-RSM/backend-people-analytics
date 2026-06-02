@@ -166,6 +166,7 @@ class EmployeeRepo:
                 Employee.last_name,
                 Employee.dni,
                 Employee.email,
+                Employee.birth_date,
                 Employee.joined_at,
                 Category.id.label("category_id"),
                 Category.name.label("category_name"),
@@ -271,3 +272,66 @@ class EmployeeRepo:
         )
         res = await self.db.execute(stmt)
         return res.scalars().first()
+
+    async def get_employee_by_id(self, employee_id: int):
+        stmt = select(Employee).where(Employee.id == employee_id)
+        res = await self.db.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def get_employee_history_timeline(self, employee_id: int):
+        stmt = (
+            select(
+                EmployeeHistory.start_at,
+                EmployeeHistory.end_at,
+                EmployeeHistory.society_id,
+                Society.name.label("society_name"),
+                EmployeeHistory.department_id,
+                Department.name.label("department_name"),
+                EmployeeHistory.office_id,
+                Office.name.label("office_name"),
+                EmployeeHistory.category_id,
+                Category.name.label("category_name"),
+            )
+            .outerjoin(Society, Society.id == EmployeeHistory.society_id)
+            .outerjoin(
+                Department, Department.id == EmployeeHistory.department_id
+            )
+            .outerjoin(Office, Office.id == EmployeeHistory.office_id)
+            .outerjoin(Category, Category.id == EmployeeHistory.category_id)
+            .where(EmployeeHistory.employee_id == employee_id)
+            .order_by(EmployeeHistory.start_at.asc(), EmployeeHistory.id.asc())
+        )
+        res = await self.db.execute(stmt)
+        return res.mappings().all()
+
+    async def get_employee_salary_timeline(self, employee_id: int):
+        stmt = (
+            select(Salary)
+            .where(Salary.employee_id == employee_id)
+            .order_by(Salary.start_at.asc(), Salary.id.asc())
+        )
+        res = await self.db.execute(stmt)
+        return res.scalars().all()
+
+    async def get_employee_evaluation_timeline(self, employee_id: int):
+        stmt = (
+            select(
+                Evaluation.evaluation_at,
+                Evaluation.final_score,
+                PositiveImpact.bol_positive_impact.label(
+                    "bol_positive_impact"
+                ),
+            )
+            .outerjoin(
+                PositiveImpact,
+                and_(
+                    PositiveImpact.employee_id == Evaluation.employee_id,
+                    func.date_trunc("year", PositiveImpact.evaluation_at)
+                    == func.date_trunc("year", Evaluation.evaluation_at),
+                ),
+            )
+            .where(Evaluation.employee_id == employee_id)
+            .order_by(Evaluation.evaluation_at.asc(), Evaluation.id.asc())
+        )
+        res = await self.db.execute(stmt)
+        return res.mappings().all()

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, String
+from sqlalchemy import DateTime, Float, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -30,6 +31,12 @@ class OnaActive(Base):
     percentile_3: Mapped[float] = mapped_column(nullable=False)
     percentile_4: Mapped[float] = mapped_column(nullable=False)
     degree_centrality: Mapped[float] = mapped_column(Float, nullable=False)
+    graph_x_coordinate: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 12), nullable=True
+    )
+    graph_y_coordinate: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 12), nullable=True
+    )
     closeness_centrality: Mapped[float] = mapped_column(Float, nullable=True)
     betweenness_centrality: Mapped[float] = mapped_column(Float, nullable=True)
     eigenvector_centrality: Mapped[float] = mapped_column(Float, nullable=True)

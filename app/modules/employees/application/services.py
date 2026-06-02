@@ -1,5 +1,10 @@
-from datetime import datetime
-from app.modules.employees.schemas import EmployeeRowOut
+from datetime import date as date_type
+from datetime import datetime, timezone
+from app.modules.employees.schemas import (
+    EmployeeRowOut,
+    EmployeeTimelineEvolutionOut,
+    EmployeeTimelineEventOut,
+)
 from app.modules.employees.infrastructure.repo import EmployeeRepo
 from app.auth import graph_get_user_photo_by_oid
 from fastapi import HTTPException, Response
@@ -8,6 +13,10 @@ from fastapi import HTTPException, Response
 class EmployeeService:
     def __init__(self, read_repo: EmployeeRepo):
         self.read_repo = read_repo
+
+    @staticmethod
+    def _clean_timeline_payload(payload: dict) -> dict:
+        return {key: value for key, value in payload.items() if value}
 
     async def list_rows(
         self,
@@ -107,3 +116,119 @@ class EmployeeService:
             "attrition_rate": attrition_rate,
         }
         return attrition_response
+
+    async def employee_timeline_evolution(
+        self, employee_id: int
+    ) -> EmployeeTimelineEvolutionOut:
+        def _to_utc(value: datetime | date_type) -> datetime:
+            if isinstance(value, datetime):
+                if value.tzinfo is None:
+                    return value.replace(tzinfo=timezone.utc)
+                return value.astimezone(timezone.utc)
+
+            if isinstance(value, date_type):
+                return datetime(
+                    value.year,
+                    value.month,
+                    value.day,
+                    tzinfo=timezone.utc,
+                )
+
+            raise ValueError(
+                f"Unsupported date value type for timeline: {type(value)}"
+            )
+
+        employee = await self.read_repo.get_employee_by_id(employee_id)
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        history_rows = await self.read_repo.get_employee_history_timeline(
+            employee_id=employee_id
+        )
+        salary_rows = await self.read_repo.get_employee_salary_timeline(
+            employee_id=employee_id
+        )
+        evaluation_rows = await self.read_repo.get_employee_evaluation_timeline(
+            employee_id=employee_id
+        )
+
+        events: list[EmployeeTimelineEventOut] = []
+
+        for row in history_rows:
+            events.append(
+                EmployeeTimelineEventOut(
+                    event_type="org_change",
+                    event_at=_to_utc(row.start_at),
+                    title="Cambio organizativo",
+                    payload=self._clean_timeline_payload(
+                        {
+                            "start_at": row.start_at.isoformat(),
+                            "end_at": (
+                                row.end_at.isoformat() if row.end_at else None
+                            ),
+                            "society_id": row.society_id,
+                            "society_name": row.society_name,
+                            "department_id": row.department_id,
+                            "department_name": row.department_name,
+                            "office_id": row.office_id,
+                            "office_name": row.office_name,
+                            "category_id": row.category_id,
+                            "category_name": row.category_name,
+                        }
+                    ),
+                )
+            )
+
+        for row in salary_rows:
+            events.append(
+                EmployeeTimelineEventOut(
+                    event_type="salary_change",
+                    event_at=_to_utc(row.start_at),
+                    title="Cambio retributivo",
+                    payload=self._clean_timeline_payload(
+                        {
+                            "start_at": row.start_at.isoformat(),
+                            "end_at": (
+                                row.end_at.isoformat() if row.end_at else None
+                            ),
+                            "salary": float(row.salary),
+                            "bonus": (
+                                float(row.bonus)
+                                if row.bonus is not None
+                                else None
+                            ),
+                        }
+                    ),
+                )
+            )
+
+        for row in evaluation_rows:
+            events.append(
+                EmployeeTimelineEventOut(
+                    event_type="evaluation",
+                    event_at=_to_utc(row.evaluation_at),
+                    title="Evaluación desempeño",
+                    payload=self._clean_timeline_payload(
+                        {
+                            "evaluation_at": row.evaluation_at.isoformat(),
+                            "final_score": float(row.final_score),
+                            "bol_positive_impact": (
+                                float(row.bol_positive_impact)
+                                if row.bol_positive_impact is not None
+                                else None
+                            ),
+                        }
+                    ),
+                )
+            )
+
+        events.sort(key=lambda item: item.event_at)
+
+        return EmployeeTimelineEvolutionOut(
+            employee_id=employee.id,
+            employee_name=f"{employee.first_name} {employee.last_name}",
+            joined_at=employee.joined_at,
+            left_at=employee.left_at,
+            total_events=len(events),
+            events=events,
+        )

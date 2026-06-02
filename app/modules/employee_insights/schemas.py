@@ -21,15 +21,6 @@ class InsightFamily(str, Enum):
 
 
 class InsightCode(str, Enum):
-    HIGH_PERFORMANCE = "high_performance"
-    SUSTAINED_HIGH_PERFORMANCE = "sustained_high_performance"
-    PERFORMANCE_GROWTH = "performance_growth"
-    PERFORMANCE_DECLINE = "performance_decline"
-    PERFORMANCE_STABLE = "performance_stable"
-    TEAM_CONNECTOR = "team_connector"
-    ORGANIZATIONAL_CONNECTOR = "organizational_connector"
-    INFLUENTIAL_PROFILE = "influential_profile"
-    WELL_CONNECTED_PROFILE = "well_connected_profile"
 
     HIGH_SOLID_PERFORMANCE = "high_solid_performance"
     HIDDEN_RISK = "hidden_risk"
@@ -39,12 +30,13 @@ class InsightCode(str, Enum):
     CRITICAL = "critical"
 
     # --- ONA RELACIONES (nueva tabla people.ona_insights) ---
-    STRONG_TRANSVERSAL_LEADERSHIP = "strong_transversal_leadership"
-    TRANSVERSAL_INFLUENCE = "transversal_influence"
-    LATERAL_INFLUENCE = "lateral_influence"
-    UPWARD_INFLUENCE = "upward_influence"
-    BRIDGE_PERSON = "bridge_person"
+    UPPER_LEVEL_INFLUENCE = "upper_level_influence"
     HIGH_TEAM_TRUST = "high_team_trust"
+    TRANSVERSAL_LEADERSHIP = "transversal_leadership"
+    LOWER_LEVEL_INFLUENCE = "lower_level_influence"
+    TEAM_CONNECTOR = "team_connector"
+    ORGANIZATIONAL_CONNECTOR = "organizational_connector"
+    PEER_LEVEL_INFLUENCE = "peer_level_influence"
 
     # --- ONA ACTIVO refinado ---
     ACTIVE_INFLUENCE_CI = "active_influence_ci"
@@ -71,8 +63,14 @@ class EmployeeInsightItemOut(BaseModel):
 
 
 class EmployeeInsightFeaturesOut(BaseModel):
+    # ------------------------------------------------------------------
+    # Estado empleado
+    # ------------------------------------------------------------------
     employee_active: bool
-
+    category: str | None = None
+    # ------------------------------------------------------------------
+    # PERFORMANCE
+    # ------------------------------------------------------------------
     current_evaluation_at: datetime | None = None
     previous_evaluation_at: datetime | None = None
 
@@ -85,6 +83,9 @@ class EmployeeInsightFeaturesOut(BaseModel):
     performance_band: str | None = None
     performance_trend: str | None = None
 
+    # ------------------------------------------------------------------
+    # ONA ACTIVO
+    # ------------------------------------------------------------------
     ona_record_count: int = 0
     ona_category_ids: list[int] = Field(default_factory=list)
     ona_influence_ids: list[int] = Field(default_factory=list)
@@ -101,16 +102,40 @@ class EmployeeInsightFeaturesOut(BaseModel):
     betweenness_centrality: float | None = None
     eigenvector_centrality: float | None = None
 
+    # ------------------------------------------------------------------
+    # ONA RELACIONES (people.ona_insights)
+    # ------------------------------------------------------------------
     ona_insight_record_count: int = 0
     ona_insight_categories: list[str] = Field(default_factory=list)
 
+    # --- CORE METRICS ---
     n_different_categories_in: float | None = None
     n_same_category_in: float | None = None
     n_upper_categories_in: float | None = None
+    n_lower_categories_in: float | None = None
     n_different_departments_in: float | None = None
+
+    # --- PARTICIPACIÓN / CALIDAD MUESTRA ---
+    n_respuestas: float | None = None
+    tasa_respuestas: float | None = None
+
+    # --- CONTEXTO DE REFERENCIA (percentiles) ---
+    n_same_dept_office_in_no_ci: float | None = None
+    p80_n_same_dept_office_in_no_ci: float | None = None
+
+    p80_n_different_categories_in: float | None = None
+    p80_n_different_departments_in: float | None = None
+
+    # --- LEGACY (puedes deprecar luego) ---
     n_total_votes_in: float | None = None
     percentile_80_votes_dpt_office: float | None = None
 
+    # --- CLASIFICACIÓN GLOBAL ---
+    influence: str | None = None  # (central / hipo / etc.)
+
+    # ------------------------------------------------------------------
+    # RELACIONES CRUDAS (para debug / exploración)
+    # ------------------------------------------------------------------
     incoming_unique_relations: int = 0
     outgoing_unique_relations: int = 0
     unique_relations: int = 0

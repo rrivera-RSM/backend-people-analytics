@@ -13,6 +13,13 @@ from app.infrastructure.db.models.people.ona_employee_node import (
 )
 from app.infrastructure.db.models.people.ona_insights import OnaInsights
 from app.modules.employee_insights.schemas import EmployeeInsightContext
+from app.infrastructure.db.models.people.employee_attrition import (
+    EmployeeAttrition,
+)
+from app.infrastructure.db.models.core.category import Category
+from app.infrastructure.db.models.core.office import Office
+from app.infrastructure.db.models.core.department import Department
+from app.infrastructure.db.models.core.society import Society
 
 
 class EmployeeInsightRepository:
@@ -20,9 +27,38 @@ class EmployeeInsightRepository:
         self.session = session
 
     async def get_employee_by_id(self, employee_id: int) -> Employee | None:
-        stmt = select(Employee).where(Employee.id == employee_id)
+        stmt = (
+            select(
+                Employee.id,
+                Employee.first_name,
+                Employee.last_name,
+                Employee.dni,
+                Employee.email,
+                Employee.birth_date,
+                Employee.joined_at,
+                Employee.left_at,
+                Category.id.label("category_id"),
+                Category.name.label("category_name"),
+                Office.id.label("office_id"),
+                Office.name.label("office_name"),
+                Department.id.label("department_id"),
+                Department.name.label("department_name"),
+                Society.id.label("society_id"),
+                Society.name.label("society_name"),
+                EmployeeAttrition.attrition_rate.label("attrition_rate"),
+            )
+            .outerjoin(Office, Office.id == Employee.office_id)
+            .outerjoin(Department, Department.id == Employee.department_id)
+            .outerjoin(Society, Society.id == Employee.society_id)
+            .outerjoin(Category, Category.id == Employee.category_id)
+            .outerjoin(
+                EmployeeAttrition,
+                EmployeeAttrition.employee_id == Employee.id,
+            )
+            .where(Employee.id == employee_id)
+        )
         result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.mappings().first()
 
     async def get_latest_two_evaluations(
         self,

@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends, Security
 
-from app.modules.ona.schemas import OnaRelationsOut, OnaActiveOut
+from app.modules.ona.schemas import (
+    OnaRelationsOut,
+    OnaActiveOut,
+    OnaGraphOut,
+)
 from app.modules.ona.application.services import OnaService
 from app.api.deps import get_ona_service
 from app.auth import azure_scheme
@@ -15,14 +19,15 @@ ona_router = APIRouter(
 
 @ona_router.get(
     "/relations",
-    response_model=list[OnaRelationsOut],
+    response_model=OnaGraphOut,
     response_model_exclude_none=True,
     dependencies=[Depends(azure_scheme)],
 )
 async def list_ona_relations(
+    society_id: int | None = None,
     service: OnaService = Depends(get_ona_service),
 ):
-    return await service.get_all_ona_relations()
+    return await service.get_all_ona_relations(society_id=society_id)
 
 
 @ona_router.get(

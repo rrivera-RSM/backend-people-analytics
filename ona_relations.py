@@ -109,7 +109,9 @@ def main():
             if missing:
                 print("Aviso: faltan columnas:", missing)
 
-            edges_enriched = enrich_edges(edges_raw, lookup, ID_COL, EMAIL_COL)
+            edges_enriched = enrich_edges(
+                edges_raw, lookup, ID_COL, EMAIL_COL
+            )
 
             # nodes = ids únicos de from/to, con email
             node_ids = pd.unique(
@@ -203,7 +205,9 @@ def main():
                         dropna=False
                     )
                     for k, v in vc.items():
-                        summary_counter[k] = summary_counter.get(k, 0) + int(v)
+                        summary_counter[k] = summary_counter.get(k, 0) + int(
+                            v
+                        )
 
                 # pair summary incremental (puede crecer mucho; úsalo si no es enorme)
                 if set(["question_id", "from_email", "to_email"]).issubset(
