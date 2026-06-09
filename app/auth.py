@@ -31,10 +31,10 @@ def acquire_graph_token_obo(user_access_token: str) -> str:
         user_assertion=user_access_token, scopes=GRAPH_SCOPES
     )
     if "access_token" not in result:
+        error = result.get("error")
+        description = result.get("error_description")
         raise RuntimeError(
-            f"OBO failed: {result.get('error')} - {
-                result.get('error_description')
-            }"
+            f"OBO failed: {error} - {description}"
         )
     return result["access_token"]
 
