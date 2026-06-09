@@ -1,44 +1,56 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
 
 from ...base import Base
 
 
-class Kpis(Base):
-    """
-    Modelo ORM de Kpis.
-    Representa un registro de evaluación en la base de datos.
-    """
-
-    __tablename__ = "salary_avg"
+class SalaryIncreaseAvg(Base):
+    __tablename__ = "mv_salary_increase_avgs"
     __table_args__ = {"schema": "people"}
 
-    # ---- Columns ----
-    id: Mapped[int] = mapped_column(primary_key=True)
-    start_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+    society_id: Mapped[Optional[int]] = mapped_column(
+        primary_key=True, nullable=True
     )
-    end_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+    office_id: Mapped[Optional[int]] = mapped_column(
+        primary_key=True, nullable=True
     )
-    society_id: Mapped[int] = mapped_column(nullable=False)
-    department_id: Mapped[int] = mapped_column(nullable=False)
-    office_id: Mapped[int] = mapped_column(nullable=False)
-    category_id: Mapped[int] = mapped_column(nullable=False)
-    salary_avg: Mapped[float] = mapped_column(nullable=False)
-    bonus_avg: Mapped[float] = mapped_column(nullable=False)
+    category_id: Mapped[Optional[int]] = mapped_column(
+        primary_key=True, nullable=True
+    )
+    department_id: Mapped[Optional[int]] = mapped_column(
+        primary_key=True, nullable=True
+    )
+    avg_increase_amount: Mapped[float] = mapped_column(nullable=False)
+    avg_increase_percentage: Mapped[float] = mapped_column(nullable=False)
+    increases_count: Mapped[int] = mapped_column(nullable=False)
+    g_society: Mapped[int] = mapped_column(primary_key=True, nullable=False)
+    g_office: Mapped[int] = mapped_column(primary_key=True, nullable=False)
+    g_category: Mapped[int] = mapped_column(primary_key=True, nullable=False)
+    g_department: Mapped[int] = mapped_column(primary_key=True, nullable=False)
 
-    aud_creation_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+
+class BonusAvg(Base):
+    __tablename__ = "mv_bonus_avgs"
+    __table_args__ = {"schema": "people"}
+
+    society_id: Mapped[Optional[int]] = mapped_column(
+        primary_key=True, nullable=True
     )
-    aud_user_creation: Mapped[Optional[str]] = mapped_column(
-        String(150), nullable=True
+    office_id: Mapped[Optional[int]] = mapped_column(
+        primary_key=True, nullable=True
     )
+    category_id: Mapped[Optional[int]] = mapped_column(
+        primary_key=True, nullable=True
+    )
+    department_id: Mapped[Optional[int]] = mapped_column(
+        primary_key=True, nullable=True
+    )
+    avg_bonus: Mapped[float] = mapped_column(nullable=False)
+    records_count: Mapped[int] = mapped_column(nullable=False)
+    g_society: Mapped[int] = mapped_column(primary_key=True, nullable=False)
+    g_office: Mapped[int] = mapped_column(primary_key=True, nullable=False)
+    g_category: Mapped[int] = mapped_column(primary_key=True, nullable=False)
+    g_department: Mapped[int] = mapped_column(primary_key=True, nullable=False)

@@ -9,19 +9,19 @@ class KpisService:
     async def list_kpis(
         self,
         as_of: datetime | None = None,
-        society: int | None = None,
-        department: int | None = None,
-        office: int | None = None,
-        category: int | None = None,
+        society_id: int | None = None,
+        department_id: int | None = None,
+        office_id: int | None = None,
+        category_id: int | None = None,
         limit: int = 100,
         offset: int = 0,
     ):
         return await self.read_repo.list_kpis(
             as_of=as_of,
-            society=society,
-            department=department,
-            office=office,
-            category=category,
+            society_id=society_id,
+            department_id=department_id,
+            office_id=office_id,
+            category_id=category_id,
             limit=limit,
             offset=offset,
         )
