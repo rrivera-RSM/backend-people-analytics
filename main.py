@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 from typing import AsyncGenerator
 
 import uvicorn
@@ -93,7 +94,7 @@ async def root():
         Accessing GET / will automatically redirect the browser to
         http://localhost:8000/docs
     """
-    return RedirectResponse(url="http://localhost:8000/docs")
+    return RedirectResponse(url="/docs")
 
 
 @protected.get("/me", dependencies=[Depends(azure_scheme)])
@@ -120,4 +121,12 @@ app.include_router(ona_router)
 app.include_router(kpis_router)
 app.include_router(evaluations_router)
 
-uvicorn.run(app, host="localhost", port=8000, log_level="debug", reload=False)
+
+if __name__ == "__main__":
+    uvicorn.run(
+        app,
+        host=os.getenv("HOST", "localhost"),
+        port=int(os.getenv("PORT", "8000")),
+        log_level=os.getenv("LOG_LEVEL", "debug"),
+        reload=False,
+    )
