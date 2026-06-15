@@ -10,6 +10,7 @@ from fastapi import (
 )
 
 from app.modules.employees.schemas import (
+    AppManagerOptionOut,
     EmployeeRowOut,
     EmployeeTimelineEvolutionOut,
 )
@@ -87,6 +88,50 @@ async def list_employee_rows_by_manager(
 ):
     return await service.list_rows_by_manager(
         current_user=current_user,
+        as_of=as_of,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@employee_router.get(
+    "/people-culture/app-managers",
+    response_model=list[AppManagerOptionOut],
+    response_model_exclude_none=True,
+    dependencies=[Depends(azure_scheme)],
+)
+async def list_people_culture_app_managers(
+    q: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    current_user=Depends(azure_scheme),
+    service: EmployeeService = Depends(get_employee_service),
+):
+    return await service.list_impersonable_app_managers(
+        current_user=current_user,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@employee_router.get(
+    "/people-culture/impersonated-team",
+    response_model=list[EmployeeRowOut],
+    response_model_exclude_none=True,
+    dependencies=[Depends(azure_scheme)],
+)
+async def list_employee_rows_by_impersonated_managers(
+    manager_ids: list[int] = Query(default_factory=list),
+    as_of: datetime | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    current_user=Depends(azure_scheme),
+    service: EmployeeService = Depends(get_employee_service),
+):
+    return await service.list_rows_by_impersonated_managers(
+        current_user=current_user,
+        manager_ids=manager_ids,
         as_of=as_of,
         limit=limit,
         offset=offset,
