@@ -193,14 +193,129 @@ class EmployeeRepo:
         res = await self.db.execute(stmt)
         return res.mappings().all()
 
-    async def get_employee_id_by_oid(self, azure_oid: str) -> int | None:
+    async def list_employee_rows_by_managers(
+        self,
+        manager_employee_ids: list[int],
+        as_of: datetime | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ):
+        manager_ids = sorted(set(manager_employee_ids))
+        if not manager_ids:
+            return []
+
+        active_managers_subq = select(AppManager.id).where(
+            AppManager.id.in_(manager_ids),
+            AppManager.bol_active == 1,
+        )
+        subordinates_subq = (
+            select(AppManagerEmployee.employee_id)
+            .where(
+                AppManagerEmployee.manager_id.in_(active_managers_subq),
+                AppManagerEmployee.bol_active == 1,
+            )
+            .distinct()
+        )
+
+        stmt = (
+            select(
+                Employee.id,
+                Employee.first_name,
+                Employee.last_name,
+                Employee.dni,
+                Employee.email,
+                Employee.birth_date,
+                Employee.joined_at,
+                Category.id.label("category_id"),
+                Category.name.label("category_name"),
+                Office.id.label("office_id"),
+                Office.name.label("office_name"),
+                Department.id.label("department_id"),
+                Department.name.label("department_name"),
+                Society.id.label("society_id"),
+                Society.name.label("society_name"),
+                EmployeeAttrition.attrition_rate.label("attrition_rate"),
+            )
+            .outerjoin(Office, Office.id == Employee.office_id)
+            .outerjoin(Department, Department.id == Employee.department_id)
+            .outerjoin(Society, Society.id == Employee.society_id)
+            .outerjoin(Category, Category.id == Employee.category_id)
+            .outerjoin(
+                EmployeeAttrition,
+                EmployeeAttrition.employee_id == Employee.id,
+            )
+            .where(Employee.id.in_(subordinates_subq))
+            .order_by(Employee.first_name.asc(), Employee.last_name.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        res = await self.db.execute(stmt)
+        return res.mappings().all()
+
+    async def list_active_app_managers(
+        self,
+        q: str | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ):
+        stmt = (
+            select(
+                Employee.id,
+                Employee.first_name,
+                Employee.last_name,
+                Employee.email,
+                Category.id.label("category_id"),
+                Category.name.label("category_name"),
+                Office.id.label("office_id"),
+                Office.name.label("office_name"),
+                Department.id.label("department_id"),
+                Department.name.label("department_name"),
+            )
+            .join(AppManager, AppManager.id == Employee.id)
+            .outerjoin(Office, Office.id == Employee.office_id)
+            .outerjoin(Department, Department.id == Employee.department_id)
+            .outerjoin(Category, Category.id == Employee.category_id)
+            .where(AppManager.bol_active == 1)
+        )
+
+        if q:
+            term = f"%{q}%"
+            stmt = stmt.where(
+                or_(
+                    Employee.first_name.ilike(term),
+                    Employee.last_name.ilike(term),
+                    Employee.email.ilike(term),
+                    func.concat(
+                        Employee.first_name, " ", Employee.last_name
+                    ).ilike(term),
+                )
+            )
+
+        stmt = (
+            stmt.order_by(Employee.first_name.asc(), Employee.last_name.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        res = await self.db.execute(stmt)
+        return res.mappings().all()
+
+    async def get_employee_id_by_oid(
+        self, azure_oid: str | None
+    ) -> int | None:
 
         try:
             oid = uuid.UUID(azure_oid)
-        except ValueError:
+        except (TypeError, ValueError):
             return None
 
         stmt = select(Employee.id).where(Employee.microsoft_id == oid)
+        res = await self.db.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def get_employee_department_id(
+        self, employee_id: int
+    ) -> int | None:
+        stmt = select(Employee.department_id).where(Employee.id == employee_id)
         res = await self.db.execute(stmt)
         return res.scalar_one_or_none()
 
