@@ -27,6 +27,8 @@ from app.modules.evaluations.infrastructure.repo import (
 from app.modules.evaluations.application.services import (
     EvaluationScatterService,
 )
+from app.modules.salary_offers.infrastructure.repo import SalaryOfferRepo
+from app.modules.salary_offers.application.services import SalaryOfferService
 
 
 def get_employee_repo(
@@ -101,3 +103,15 @@ def get_evaluation_scatter_service(
     repo: EvaluationScatterRepository = Depends(get_evaluation_scatter_repo),
 ) -> EvaluationScatterService:
     return EvaluationScatterService(repo)
+
+
+def get_salary_offer_repo(
+    db: AsyncSession = Depends(get_db),
+) -> SalaryOfferRepo:
+    return SalaryOfferRepo(db)
+
+
+def get_salary_offer_service(
+    repo: SalaryOfferRepo = Depends(get_salary_offer_repo),
+) -> SalaryOfferService:
+    return SalaryOfferService(repo)
