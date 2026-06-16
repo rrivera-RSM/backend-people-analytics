@@ -4,6 +4,7 @@ from app.modules.ona.schemas import (
     OnaRelationsOut,
     OnaActiveOut,
     OnaGraphOut,
+    OnaParticipationRateOut,
 )
 from app.modules.ona.application.services import OnaService
 from app.api.deps import get_ona_service
@@ -28,6 +29,22 @@ async def list_ona_relations(
     service: OnaService = Depends(get_ona_service),
 ):
     return await service.get_all_ona_relations(society_id=society_id)
+
+
+@ona_router.get(
+    "/participation-rate",
+    response_model=OnaParticipationRateOut | None,
+    dependencies=[Depends(azure_scheme)],
+)
+async def get_ona_participation_rate(
+    society_id: int,
+    office_id: int,
+    service: OnaService = Depends(get_ona_service),
+):
+    return await service.get_participation_rate(
+        society_id=society_id,
+        office_id=office_id,
+    )
 
 
 @ona_router.get(

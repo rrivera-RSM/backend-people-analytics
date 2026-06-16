@@ -29,6 +29,15 @@ class OnaGraphOut(BaseModel):
     edges: list[OnaGraphEdgeOut]
 
 
+class OnaParticipationRateOut(BaseModel):
+    id: int
+    society_id: int
+    office_id: int
+    employee_count: float
+    response_count: float
+    participation_rate: float
+
+
 class OnaActiveOut(BaseModel):
 
     employee_id: int
