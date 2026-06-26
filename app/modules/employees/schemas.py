@@ -21,6 +21,7 @@ class EmployeeRowOut(BaseModel):
     category_id: int | None = None
     category_name: str | None = None
     attrition_rate: float | None = None
+    has_offer: bool = False
 
     joined_at: datetime
     birth_date: datetime | None = None
