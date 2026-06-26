@@ -1,6 +1,7 @@
 from datetime import date as date_type
 from datetime import datetime, timezone
 from app.modules.employees.schemas import (
+    AppManagerOptionOut,
     EmployeeRowOut,
     EmployeeTimelineEvolutionOut,
     EmployeeTimelineEventOut,
@@ -10,13 +11,57 @@ from app.auth import graph_get_user_photo_by_oid
 from fastapi import HTTPException, Response
 
 
+PEOPLE_AND_CULTURE_DEPARTMENT_ID = 15726711
+PEOPLE_CULTURE_TEST_EMPLOYEE_ID = 18066999
+
+
 class EmployeeService:
     def __init__(self, read_repo: EmployeeRepo):
         self.read_repo = read_repo
 
     @staticmethod
+    def _get_current_user_oid(current_user) -> str | None:
+        if isinstance(current_user, dict):
+            return current_user.get("oid")
+        return getattr(current_user, "oid", None)
+
+    @staticmethod
     def _clean_timeline_payload(payload: dict) -> dict:
         return {key: value for key, value in payload.items() if value}
+
+    async def _get_current_employee_id(self, current_user) -> int:
+        azure_oid = self._get_current_user_oid(current_user)
+        if not azure_oid:
+            raise HTTPException(status_code=401, detail="Missing user OID")
+
+        employee_id = await self.read_repo.get_employee_id_by_oid(
+            azure_oid=azure_oid
+        )
+        if employee_id is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Authenticated user is not registered as employee",
+            )
+
+        return employee_id
+
+    async def _ensure_people_culture_impersonation_access(
+        self, current_user
+    ) -> int:
+        employee_id = await self._get_current_employee_id(current_user)
+        if employee_id == PEOPLE_CULTURE_TEST_EMPLOYEE_ID:
+            return employee_id
+
+        department_id = await self.read_repo.get_employee_department_id(
+            employee_id
+        )
+        if department_id == PEOPLE_AND_CULTURE_DEPARTMENT_ID:
+            return employee_id
+
+        raise HTTPException(
+            status_code=403,
+            detail="People & Culture impersonation is restricted",
+        )
 
     async def list_rows(
         self,
@@ -49,13 +94,43 @@ class EmployeeService:
         offset: int = 0,
     ) -> list[EmployeeRowOut]:
 
-        azure_oid = getattr(current_user, "oid", None)
-
-        manager_employee_id = await self.read_repo.get_employee_id_by_oid(
-            azure_oid=azure_oid
+        manager_employee_id = await self._get_current_employee_id(
+            current_user
         )
         rows = await self.read_repo.list_employee_rows_by_manager(
             manager_employee_id=manager_employee_id,
+            as_of=as_of,
+            limit=limit,
+            offset=offset,
+        )
+        return [EmployeeRowOut(**row) for row in rows]
+
+    async def list_impersonable_app_managers(
+        self,
+        current_user,
+        q: str | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[AppManagerOptionOut]:
+        await self._ensure_people_culture_impersonation_access(current_user)
+        rows = await self.read_repo.list_active_app_managers(
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+        return [AppManagerOptionOut(**row) for row in rows]
+
+    async def list_rows_by_impersonated_managers(
+        self,
+        current_user,
+        manager_ids: list[int],
+        as_of: datetime | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[EmployeeRowOut]:
+        await self._ensure_people_culture_impersonation_access(current_user)
+        rows = await self.read_repo.list_employee_rows_by_managers(
+            manager_employee_ids=manager_ids,
             as_of=as_of,
             limit=limit,
             offset=offset,

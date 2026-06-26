@@ -10,6 +10,9 @@ from app.infrastructure.db.models.people.ona_employee_node import (
     OnaEmployeeNode,
 )
 from app.infrastructure.db.models.people.ona_insights import OnaInsights
+from app.infrastructure.db.models.people.ona_participation_rate import (
+    OnaParticipationRate,
+)
 
 
 class OnaRepo:
@@ -162,3 +165,26 @@ class OnaRepo:
             return res.scalar_one_or_none()
         except Exception:
             return None
+
+    async def get_participation_rate(
+        self, society_id: int, office_id: int
+    ):
+        stmt = (
+            select(
+                OnaParticipationRate.id,
+                OnaParticipationRate.society_id,
+                OnaParticipationRate.office_id,
+                OnaParticipationRate.employee_count,
+                OnaParticipationRate.response_count,
+                OnaParticipationRate.participation_rate,
+            )
+            .where(
+                OnaParticipationRate.society_id == society_id,
+                OnaParticipationRate.office_id == office_id,
+            )
+            .order_by(OnaParticipationRate.id.desc())
+            .limit(1)
+        )
+        res = await self.db.execute(stmt)
+        row = res.mappings().first()
+        return dict(row) if row else None

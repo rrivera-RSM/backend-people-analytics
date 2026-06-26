@@ -27,6 +27,22 @@ class EmployeeRowOut(BaseModel):
     birth_date: datetime | None = None
 
 
+class AppManagerOptionOut(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    email: str
+
+    office_id: int | None = None
+    office_name: str | None = None
+
+    department_id: int | None = None
+    department_name: str | None = None
+
+    category_id: int | None = None
+    category_name: str | None = None
+
+
 class EmployeeTimelineEventOut(BaseModel):
     event_type: str
     event_at: datetime
