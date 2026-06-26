@@ -24,6 +24,7 @@ from app.infrastructure.db.models.people.app_manager_employee import (
 from app.infrastructure.db.models.people.employee_attrition import (
     EmployeeAttrition,
 )
+from app.infrastructure.db.models.people.salary_offer import SalaryOffer
 
 
 class EmployeeRepo:
@@ -63,11 +64,14 @@ class EmployeeRepo:
                 EmployeeHistory.category_id,
                 rn,
             )
-            .where(
-                EmployeeHistory.end_at.is_(None)
-                | (EmployeeHistory.end_at > as_of)
-            )
+            .where(EmployeeHistory.end_at.is_(None) | (EmployeeHistory.end_at > as_of))
             .cte("current_hist")
+        )
+        has_offer = (
+            select(SalaryOffer.id)
+            .where(SalaryOffer.employee_id == Employee.id)
+            .exists()
+            .label("has_offer")
         )
 
         stmt = (
@@ -77,14 +81,17 @@ class EmployeeRepo:
                 Employee.last_name,
                 Employee.dni,
                 Employee.email,
-                Category.name.label("category"),
+                Employee.birth_date,
+                Employee.joined_at,
+                Category.id.label("category_id"),
+                Category.name.label("category_name"),
                 Office.id.label("office_id"),
                 Office.name.label("office_name"),
                 Department.id.label("department_id"),
                 Department.name.label("department_name"),
                 Society.id.label("society_id"),
                 Society.name.label("society_name"),
-                current_hist.c.start_at,
+                has_offer,
             )
             .join(
                 current_hist,
@@ -94,9 +101,7 @@ class EmployeeRepo:
                 ),
             )
             .outerjoin(Office, Office.id == current_hist.c.office_id)
-            .outerjoin(
-                Department, Department.id == current_hist.c.department_id
-            )
+            .outerjoin(Department, Department.id == current_hist.c.department_id)
             .outerjoin(Society, Society.id == current_hist.c.society_id)
             .outerjoin(
                 Category,
@@ -158,6 +163,12 @@ class EmployeeRepo:
             AppManagerEmployee.manager_id == manager_subq,
             AppManagerEmployee.bol_active == 1,
         )
+        has_offer = (
+            select(SalaryOffer.id)
+            .where(SalaryOffer.employee_id == Employee.id)
+            .exists()
+            .label("has_offer")
+        )
 
         stmt = (
             select(
@@ -177,6 +188,7 @@ class EmployeeRepo:
                 Society.id.label("society_id"),
                 Society.name.label("society_name"),
                 EmployeeAttrition.attrition_rate.label("attrition_rate"),
+                has_offer,
             )
             .outerjoin(Office, Office.id == Employee.office_id)
             .outerjoin(Department, Department.id == Employee.department_id)
@@ -206,9 +218,7 @@ class EmployeeRepo:
 
     async def get_employee_oid(self, employee_id: int) -> str | None:
         try:
-            stmt = select(Employee.microsoft_id).where(
-                Employee.id == employee_id
-            )
+            stmt = select(Employee.microsoft_id).where(Employee.id == employee_id)
             res = await self.db.execute(stmt)
             row = res.first()
         except Exception:
@@ -221,9 +231,7 @@ class EmployeeRepo:
                 Evaluation.evaluation_at,
                 Evaluation.final_score,
                 PositiveImpact.evaluation_at.label("impact_evaluation_at"),
-                PositiveImpact.bol_positive_impact.label(
-                    "bol_positive_impact"
-                ),
+                PositiveImpact.bol_positive_impact.label("bol_positive_impact"),
             )
             .outerjoin(
                 PositiveImpact,
@@ -293,9 +301,7 @@ class EmployeeRepo:
                 Category.name.label("category_name"),
             )
             .outerjoin(Society, Society.id == EmployeeHistory.society_id)
-            .outerjoin(
-                Department, Department.id == EmployeeHistory.department_id
-            )
+            .outerjoin(Department, Department.id == EmployeeHistory.department_id)
             .outerjoin(Office, Office.id == EmployeeHistory.office_id)
             .outerjoin(Category, Category.id == EmployeeHistory.category_id)
             .where(EmployeeHistory.employee_id == employee_id)
@@ -318,9 +324,7 @@ class EmployeeRepo:
             select(
                 Evaluation.evaluation_at,
                 Evaluation.final_score,
-                PositiveImpact.bol_positive_impact.label(
-                    "bol_positive_impact"
-                ),
+                PositiveImpact.bol_positive_impact.label("bol_positive_impact"),
             )
             .outerjoin(
                 PositiveImpact,

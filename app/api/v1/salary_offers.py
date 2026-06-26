@@ -32,3 +32,14 @@ async def create_salary_offer(
         payload=payload,
         current_user=current_user,
     )
+
+
+@salary_offers_router.get(
+    "/employees/{employee_id}/latest",
+    response_model=SalaryOfferOut,
+)
+async def get_latest_salary_offer(
+    employee_id: int,
+    service: SalaryOfferService = Depends(get_salary_offer_service),
+) -> SalaryOfferOut:
+    return await service.get_latest_salary_offer(employee_id=employee_id)

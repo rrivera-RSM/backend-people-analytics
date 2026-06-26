@@ -3,7 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Float, String, Text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Identity,
+    Index,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -31,22 +40,26 @@ class SalaryOffer(Base):
             "bonus_next_fy IS NULL OR bonus_next_fy >= 0",
             name="ck_salary_offer_bonus_next_fy_non_negative",
         ),
+        Index("ix_salary_offer_employee_id", "employee_id"),
+        Index("ix_salary_offer_aud_creation_at", "aud_creation_at"),
         {"schema": "people"},
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    employee_id: Mapped[int] = mapped_column(nullable=False)
+    id: Mapped[int] = mapped_column(
+        Identity(always=False),
+        primary_key=True,
+    )
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("core.employee.id"),
+        nullable=False,
+    )
     new_salary: Mapped[float] = mapped_column(Float, nullable=False)
     new_bonus: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     month_payment_bonus: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True
     )
-    bonus_next_fy: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=True
-    )
-    new_category: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
+    bonus_next_fy: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    new_category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     observations: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     aud_user_creation: Mapped[str] = mapped_column(String(150), nullable=False)
     aud_creation_at: Mapped[datetime] = mapped_column(

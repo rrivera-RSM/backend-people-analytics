@@ -37,3 +37,19 @@ class SalaryOfferRepo:
         await self.session.flush()
         await self.session.refresh(salary_offer)
         return salary_offer
+
+    async def get_latest_salary_offer(
+        self,
+        employee_id: int,
+    ) -> SalaryOffer | None:
+        stmt = (
+            select(SalaryOffer)
+            .where(SalaryOffer.employee_id == employee_id)
+            .order_by(
+                SalaryOffer.aud_creation_at.desc(),
+                SalaryOffer.id.desc(),
+            )
+            .limit(1)
+        )
+        result = await self.session.scalars(stmt)
+        return result.first()

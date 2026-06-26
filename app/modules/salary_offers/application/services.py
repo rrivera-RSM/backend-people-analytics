@@ -36,6 +36,23 @@ class SalaryOfferService:
 
         return SalaryOfferOut.model_validate(salary_offer)
 
+    async def get_latest_salary_offer(
+        self,
+        employee_id: int,
+    ) -> SalaryOfferOut:
+        exists = await self.repo.employee_exists(employee_id)
+        if not exists:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        salary_offer = await self.repo.get_latest_salary_offer(employee_id)
+        if not salary_offer:
+            raise HTTPException(
+                status_code=404,
+                detail="Salary offer not found",
+            )
+
+        return SalaryOfferOut.model_validate(salary_offer)
+
     @staticmethod
     def _get_audit_user(current_user: object) -> str:
         for attribute in ("preferred_username", "email", "upn", "name", "oid"):
