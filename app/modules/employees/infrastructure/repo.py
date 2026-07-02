@@ -228,6 +228,12 @@ class EmployeeRepo:
             )
             .distinct()
         )
+        has_offer = (
+            select(SalaryOffer.id)
+            .where(SalaryOffer.employee_id == Employee.id)
+            .exists()
+            .label("has_offer")
+        )
 
         stmt = (
             select(
@@ -247,6 +253,7 @@ class EmployeeRepo:
                 Society.id.label("society_id"),
                 Society.name.label("society_name"),
                 EmployeeAttrition.attrition_rate.label("attrition_rate"),
+                has_offer,
             )
             .outerjoin(Office, Office.id == Employee.office_id)
             .outerjoin(Department, Department.id == Employee.department_id)

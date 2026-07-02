@@ -60,23 +60,34 @@ class EmployeeInsightRepository:
         result = await self.session.execute(stmt)
         return result.mappings().first()
 
-    async def get_latest_two_evaluations(
+    async def get_current_year_and_previous_evaluations(
         self,
         employee_id: int,
         as_of: datetime,
     ) -> tuple[Evaluation | None, Evaluation | None]:
-        stmt = (
+        year_start = datetime(as_of.year, 1, 1, tzinfo=as_of.tzinfo)
+
+        current_stmt = (
             select(Evaluation)
             .where(Evaluation.employee_id == employee_id)
+            .where(Evaluation.evaluation_at >= year_start)
             .where(Evaluation.evaluation_at <= as_of)
             .order_by(Evaluation.evaluation_at.desc(), Evaluation.id.desc())
-            .limit(2)
+            .limit(1)
         )
-        result = await self.session.execute(stmt)
-        rows = list(result.scalars().all())
+        current_result = await self.session.execute(current_stmt)
+        current_evaluation = current_result.scalars().first()
 
-        current_evaluation = rows[0] if len(rows) >= 1 else None
-        previous_evaluation = rows[1] if len(rows) >= 2 else None
+        previous_stmt = (
+            select(Evaluation)
+            .where(Evaluation.employee_id == employee_id)
+            .where(Evaluation.evaluation_at < year_start)
+            .order_by(Evaluation.evaluation_at.desc(), Evaluation.id.desc())
+            .limit(1)
+        )
+        previous_result = await self.session.execute(previous_stmt)
+        previous_evaluation = previous_result.scalars().first()
+
         return current_evaluation, previous_evaluation
 
     async def get_ona_records(
@@ -163,7 +174,7 @@ class EmployeeInsightRepository:
             return None
 
         current_evaluation, previous_evaluation = (
-            await self.get_latest_two_evaluations(
+            await self.get_current_year_and_previous_evaluations(
                 employee_id=employee_id,
                 as_of=as_of,
             )
