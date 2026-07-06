@@ -12,6 +12,7 @@ from app.api.v1.kpis import kpis_router
 from app.api.v1.app_managers import app_managers_router
 from app.api.v1.evaluations import router as evaluations_router
 from app.api.v1.salary_offers import salary_offers_router
+from app.api.v1.assistant import assistant_router
 
 from app.auth import get_me, azure_scheme
 from settings import Settings
@@ -122,6 +123,7 @@ app.include_router(ona_router)
 app.include_router(kpis_router)
 app.include_router(evaluations_router)
 app.include_router(salary_offers_router)
+app.include_router(assistant_router)
 
 
 if __name__ == "__main__":

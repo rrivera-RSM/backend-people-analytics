@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     TENANT_ID: str = ""
     DATABASE_URL: str = ""
     SQL_ECHO: bool = False
+    ASSISTANT_AI_PROVIDER: str = "mock"
+    ASSISTANT_MODEL_NAME: str = ""
+    OPENAI_API_KEY: str = ""
+    ASSISTANT_MCP_SERVER_URL: str = ""
+    ASSISTANT_AZURE_OPENAI_ENDPOINT: str = ""
+    ASSISTANT_LOCAL_AI_ENDPOINT: str = ""
 
     SCOPE_DESCRIPTION: str = "user_impersonation"
 

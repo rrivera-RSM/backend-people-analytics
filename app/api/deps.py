@@ -29,6 +29,14 @@ from app.modules.evaluations.application.services import (
 )
 from app.modules.salary_offers.infrastructure.repo import SalaryOfferRepo
 from app.modules.salary_offers.application.services import SalaryOfferService
+from app.modules.assistant.application.ports import AIProviderPort
+from app.modules.assistant.application.services import AssistantService
+from app.modules.assistant.application.tool_registry import (
+    AssistantToolRegistry,
+)
+from app.modules.assistant.infrastructure.ai.factory import build_ai_provider
+from app.modules.assistant.infrastructure.repo import AssistantShapRepository
+from settings import Settings
 
 
 def get_employee_repo(
@@ -115,3 +123,32 @@ def get_salary_offer_service(
     repo: SalaryOfferRepo = Depends(get_salary_offer_repo),
 ) -> SalaryOfferService:
     return SalaryOfferService(repo)
+
+
+def get_ai_provider() -> AIProviderPort:
+    return build_ai_provider(Settings())
+
+
+def get_assistant_shap_repository(
+    db: AsyncSession = Depends(get_db),
+) -> AssistantShapRepository:
+    return AssistantShapRepository(db)
+
+
+def get_assistant_tool_registry(
+    shap_repository: AssistantShapRepository = Depends(
+        get_assistant_shap_repository
+    ),
+) -> AssistantToolRegistry:
+    return AssistantToolRegistry(shap_repository=shap_repository)
+
+
+def get_assistant_service(
+    ai_provider: AIProviderPort = Depends(get_ai_provider),
+    tool_registry: AssistantToolRegistry = Depends(
+        get_assistant_tool_registry
+    ),
+) -> AssistantService:
+    return AssistantService(
+        ai_provider=ai_provider, tool_registry=tool_registry
+    )
