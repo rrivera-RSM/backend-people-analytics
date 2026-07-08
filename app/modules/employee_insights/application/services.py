@@ -1139,10 +1139,15 @@ class EmployeeInsightService:
                 )
             )
 
-        elif score < self.rules.high_performance_score and ona_category in {
-            "central",
-            "hipo",
-        }:
+        elif (
+            score > 50
+            and score < self.rules.high_performance_score
+            and ona_category
+            in {
+                "central",
+                "hipo",
+            }
+        ):
             insights.append(
                 EmployeeInsightItemOut(
                     code=InsightCode.HIGH_UNDERRECOGNIZED,
