@@ -1,5 +1,9 @@
+from functools import lru_cache
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from settings import Settings
+
 from app.modules.employees.infrastructure.repo import EmployeeRepo
 from app.modules.employees.application.services import EmployeeService
 from app.infrastructure.db.session import get_db
@@ -16,18 +20,22 @@ from app.modules.app_managers.application.services import (
 from app.modules.employee_insights.infrastructure.repo import (
     EmployeeInsightRepository,
 )
-
 from app.modules.employee_insights.application.services import (
     EmployeeInsightService,
 )
-
 from app.modules.evaluations.infrastructure.repo import (
     EvaluationScatterRepository,
 )
 from app.modules.evaluations.application.services import (
     EvaluationScatterService,
 )
+from app.modules.salary_offers.infrastructure.email_sender import (
+    SalaryProposalEmailSender,
+)
 from app.modules.salary_offers.infrastructure.repo import SalaryOfferRepo
+from app.modules.salary_offers.application.listeners import (
+    SalaryOfferEventListener,
+)
 from app.modules.salary_offers.application.services import SalaryOfferService
 
 
@@ -86,9 +94,7 @@ def get_employee_insight_repository(
 
 
 def get_employee_insight_service(
-    repo: EmployeeInsightRepository = Depends(
-        get_employee_insight_repository
-    ),
+    repo: EmployeeInsightRepository = Depends(get_employee_insight_repository),
 ) -> EmployeeInsightService:
     return EmployeeInsightService(repo)
 
@@ -111,7 +117,31 @@ def get_salary_offer_repo(
     return SalaryOfferRepo(db)
 
 
+@lru_cache
+def get_salary_proposal_email_sender() -> SalaryProposalEmailSender:
+    settings = Settings()
+    return SalaryProposalEmailSender(
+        tenant_id=settings.TENANT_ID,
+        client_id=settings.APP_CLIENT_ID,
+        client_secret=settings.APP_CLIENT_SECRET,
+        sender_email=settings.GRAPH_MAIL_SENDER,
+        recipients=settings.SALARY_PROPOSAL_NOTIFICATION_RECIPIENTS,
+    )
+
+
+def get_salary_offer_event_listener(
+    repo: SalaryOfferRepo = Depends(get_salary_offer_repo),
+    email_sender: SalaryProposalEmailSender = Depends(
+        get_salary_proposal_email_sender
+    ),
+) -> SalaryOfferEventListener:
+    return SalaryOfferEventListener(repo=repo, email_sender=email_sender)
+
+
 def get_salary_offer_service(
     repo: SalaryOfferRepo = Depends(get_salary_offer_repo),
+    event_listener: SalaryOfferEventListener = Depends(
+        get_salary_offer_event_listener
+    ),
 ) -> SalaryOfferService:
-    return SalaryOfferService(repo)
+    return SalaryOfferService(repo=repo, event_listener=event_listener)

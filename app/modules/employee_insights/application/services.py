@@ -57,8 +57,8 @@ class EmployeeInsightService:
         as_of = as_of or datetime.now(timezone.utc)
 
         context = await self.repo.get_employee_insight_context(
-            employee_id=employee_id,
             as_of=as_of,
+            employee_id=employee_id,
         )
         if context is None:
             raise EmployeeNotFoundError(

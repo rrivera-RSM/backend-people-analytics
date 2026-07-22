@@ -1,4 +1,4 @@
-from pydantic import AnyHttpUrl, computed_field
+﻿from pydantic import AnyHttpUrl, computed_field
 from pydantic_settings import BaseSettings
 
 
@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     TENANT_ID: str = ""
     DATABASE_URL: str = ""
     SQL_ECHO: bool = False
+
+    GRAPH_MAIL_SENDER: str = "rrivera@rsm.es"
+    SALARY_PROPOSAL_NOTIFICATION_RECIPIENTS: list[str] = [
+        "digarcia@rsm.es",
+        "rrivera@rsm.es",
+    ]
 
     SCOPE_DESCRIPTION: str = "user_impersonation"
 

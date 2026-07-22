@@ -148,10 +148,12 @@ Variables importantes:
 - `BACKEND_CORS_ORIGINS`: origenes permitidos por CORS.
 - `OPENAPI_CLIENT_ID`: cliente usado por Swagger UI para login OAuth.
 - `APP_CLIENT_ID`: app registration de la API.
-- `APP_CLIENT_SECRET`: secreto usado por MSAL para el flujo On-Behalf-Of.
+- `APP_CLIENT_SECRET`: secreto usado por MSAL para OBO y app-only.
 - `TENANT_ID`: tenant de Azure AD.
 - `DATABASE_URL`: cadena de conexion de SQLAlchemy async.
 - `SQL_ECHO`: si es `True`, SQLAlchemy imprime las queries SQL.
+- `GRAPH_MAIL_SENDER`: buzon que envia las notificaciones.
+- `SALARY_PROPOSAL_NOTIFICATION_RECIPIENTS`: destinatarios de propuestas.
 
 Tambien construye dinamicamente el scope:
 
@@ -459,6 +461,18 @@ para llamar a Graph. Hace esto:
    - `/users/{oid}/photos/{size}/$value`
 
 Esto se llama flujo **On-Behalf-Of**: la API actua en nombre del usuario.
+
+### Notificaciones por Microsoft Graph
+
+Las notificaciones de propuestas salariales usan autenticacion app-only:
+
+1. MSAL obtiene un token con `acquire_token_for_client`.
+2. El backend llama a `/users/{GRAPH_MAIL_SENDER}/sendMail`.
+3. Graph entrega el correo y guarda una copia en Elementos enviados.
+
+La App Registration debe tener el permiso de aplicacion `Mail.Send` con
+consentimiento de administrador. En produccion conviene restringir ese permiso
+al buzon configurado mediante Exchange Application RBAC.
 
 ## Como anadir un endpoint nuevo
 
