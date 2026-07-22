@@ -1,7 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from fastapi import HTTPException
 
+from app.modules.salary_offers.application.listeners import (
+    SalaryOfferEventListener,
+)
 from app.modules.salary_offers.infrastructure.repo import SalaryOfferRepo
 from app.modules.salary_offers.schemas import (
     SalaryOfferCreateIn,
@@ -10,8 +13,13 @@ from app.modules.salary_offers.schemas import (
 
 
 class SalaryOfferService:
-    def __init__(self, repo: SalaryOfferRepo) -> None:
+    def __init__(
+        self,
+        repo: SalaryOfferRepo,
+        event_listener: SalaryOfferEventListener | None = None,
+    ) -> None:
         self.repo = repo
+        self.event_listener = event_listener
 
     async def create_salary_offer(
         self,
@@ -23,6 +31,14 @@ class SalaryOfferService:
             raise HTTPException(status_code=404, detail="Employee not found")
 
         audit_user = self._get_audit_user(current_user)
+        completion_event = None
+        if self.event_listener is not None:
+            completion_event = (
+                await self.event_listener.prepare_all_managees_have_proposal(
+                    audit_user=audit_user,
+                    employee_id=payload.employee_id,
+                )
+            )
 
         try:
             salary_offer = await self.repo.create_salary_offer(
@@ -33,6 +49,11 @@ class SalaryOfferService:
         except Exception:
             await self.repo.rollback()
             raise
+
+        if self.event_listener is not None:
+            await self.event_listener.handle_all_managees_have_proposal(
+                completion_event
+            )
 
         return SalaryOfferOut.model_validate(salary_offer)
 
