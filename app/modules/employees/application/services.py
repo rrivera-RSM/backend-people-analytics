@@ -12,7 +12,7 @@ from fastapi import HTTPException, Response
 
 
 PEOPLE_AND_CULTURE_DEPARTMENT_ID = 15726711
-PEOPLE_CULTURE_TEST_EMPLOYEE_ID = 18066999
+PEOPLE_CULTURE_TEST_EMPLOYEE_ID = [18066999, 15914146]
 
 
 class EmployeeService:
@@ -49,7 +49,7 @@ class EmployeeService:
         self, current_user
     ) -> int:
         employee_id = await self._get_current_employee_id(current_user)
-        if employee_id == PEOPLE_CULTURE_TEST_EMPLOYEE_ID:
+        if employee_id in PEOPLE_CULTURE_TEST_EMPLOYEE_ID:
             return employee_id
 
         department_id = await self.read_repo.get_employee_department_id(
